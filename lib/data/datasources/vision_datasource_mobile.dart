@@ -1,0 +1,173 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:ui';
+import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
+import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:hand_landmarker/hand_landmarker.dart';
+import '../../domain/entities/face_bounds.dart';
+import '../../domain/entities/hand_pose.dart';
+import '../../domain/entities/landmark_point.dart';
+import 'vision_datasource.dart';
+
+class PlatformVisionDataSource implements VisionDataSource {
+  HandLandmarkerPlugin? _handLandmarkerPlugin;
+  FaceDetector? _faceDetector;
+  final _handController = StreamController<List<HandPose>>.broadcast();
+  final _faceController = StreamController<List<FaceBounds>>.broadcast();
+
+  StreamSubscription? _rawHandSub;
+  bool _isProcessingFace = false;
+  int _frameCounter = 0;
+  bool _initialized = false;
+
+  @override
+  bool get isInitialized => _initialized;
+
+  @override
+  Stream<List<HandPose>> get handStream => _handController.stream;
+
+  @override
+  Stream<List<FaceBounds>> get faceStream => _faceController.stream;
+
+  @override
+  Future<void> initialize() async {
+    if (!Platform.isAndroid) {
+      _initialized = true;
+      return;
+    }
+
+    try {
+      _handLandmarkerPlugin = HandLandmarkerPlugin.create(
+        numHands: 1,
+        minHandDetectionConfidence: 0.55,
+        delegate: HandLandmarkerDelegate.gpu,
+      );
+
+      _rawHandSub = _handLandmarkerPlugin?.landmarkStream.listen((rawHands) {
+        final detected = rawHands.map((h) {
+          final landmarks = h.landmarks.map((lm) => LandmarkPoint(
+            x: lm.x,
+            y: lm.y,
+            z: 0.0,
+          )).toList();
+          return HandPose(landmarks: landmarks, confidence: 1.0);
+        }).toList();
+        _handController.add(detected);
+      });
+
+      _faceDetector = FaceDetector(
+        options: FaceDetectorOptions(
+          performanceMode: FaceDetectorMode.fast,
+          minFaceSize: 0.15,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Aviso: Plugins nativos no disponibles en este host: $e');
+    }
+
+    _initialized = true;
+  }
+
+  @override
+  void processFrame(dynamic image, int sensorOrientation) {
+    if (image is! CameraImage) return;
+    if (!_initialized || _handLandmarkerPlugin == null) return;
+    _frameCounter++;
+
+    // 1. Detección de mano (1 de cada 2 cuadros)
+    if (_frameCounter % 2 == 0) {
+      try {
+        _handLandmarkerPlugin!.processFrame(image, sensorOrientation);
+      } catch (_) {}
+    }
+
+    // 2. Detección facial preliminar (1 de cada 8 cuadros)
+    if (_frameCounter % 8 == 0 && !_isProcessingFace && _faceDetector != null) {
+      _isProcessingFace = true;
+      _processFaceFrame(image, sensorOrientation).whenComplete(() {
+        _isProcessingFace = false;
+      });
+    }
+  }
+
+  Future<void> _processFaceFrame(CameraImage image, int sensorOrientation) async {
+    try {
+      final inputImage = _inputImageFromCameraImage(image, sensorOrientation);
+      if (inputImage == null) return;
+      final faces = await _faceDetector!.processImage(inputImage);
+      final double imgW = image.width.toDouble();
+      final double imgH = image.height.toDouble();
+      final double rotW = (sensorOrientation == 90 || sensorOrientation == 270) ? imgH : imgW;
+      final double rotH = (sensorOrientation == 90 || sensorOrientation == 270) ? imgW : imgH;
+
+      final boundsList = faces.map((f) {
+        final b = f.boundingBox;
+        final double uNorm = (b.left / rotW).clamp(0.0, 1.0);
+        final double vNorm = (b.top / rotH).clamp(0.0, 1.0);
+        final double wNorm = (b.width / rotW).clamp(0.0, 1.0);
+        final double hNorm = (b.height / rotH).clamp(0.0, 1.0);
+
+        if (sensorOrientation == 90) {
+          return FaceBounds(
+            left: vNorm,
+            top: (1.0 - uNorm - wNorm).clamp(0.0, 1.0),
+            width: hNorm,
+            height: wNorm,
+          );
+        } else if (sensorOrientation == 270) {
+          return FaceBounds(
+            left: (1.0 - vNorm - hNorm).clamp(0.0, 1.0),
+            top: uNorm,
+            width: hNorm,
+            height: wNorm,
+          );
+        } else {
+          return FaceBounds(left: uNorm, top: vNorm, width: wNorm, height: hNorm);
+        }
+      }).toList();
+      _faceController.add(boundsList);
+    } catch (_) {}
+  }
+
+  InputImage? _inputImageFromCameraImage(CameraImage image, int sensorOrientation) {
+    try {
+      final WriteBuffer allBytes = WriteBuffer();
+      for (final Plane plane in image.planes) {
+        allBytes.putUint8List(plane.bytes);
+      }
+      final bytes = allBytes.done().buffer.asUint8List();
+
+      final imageRotation = InputImageRotationValue.fromRawValue(sensorOrientation) ??
+          InputImageRotation.rotation0deg;
+
+      final inputImageFormat = InputImageFormatValue.fromRawValue(image.format.raw) ??
+          InputImageFormat.nv21;
+
+      return InputImage.fromBytes(
+        bytes: bytes,
+        metadata: InputImageMetadata(
+          size: Size(image.width.toDouble(), image.height.toDouble()),
+          rotation: imageRotation,
+          format: inputImageFormat,
+          bytesPerRow: image.planes.first.bytesPerRow,
+        ),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> dispose() async {
+    _initialized = false;
+    await _rawHandSub?.cancel();
+    try {
+      await _faceDetector?.close();
+    } catch (_) {}
+    await _handController.close();
+    await _faceController.close();
+  }
+}
+
+VisionDataSource createVisionDataSource() => PlatformVisionDataSource();

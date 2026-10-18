@@ -1,0 +1,77 @@
+import 'dart:ui';
+import 'package:flutter/material.dart';
+import '../../core/theme/app_colors.dart';
+import 'settings/settings_screen.dart';
+import 'teaching/teaching_screen.dart';
+import 'translation/translation_screen.dart';
+
+class MainScaffold extends StatefulWidget {
+  const MainScaffold({super.key});
+
+  @override
+  State<MainScaffold> createState() => _MainScaffoldState();
+}
+
+class _MainScaffoldState extends State<MainScaffold> {
+  int _currentIndex = 0;
+
+  final List<Widget> _screens = const [
+    TranslationScreen(),
+    TeachingScreen(),
+    SettingsScreen(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _screens,
+      ),
+      bottomNavigationBar: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surfaceGlass,
+              border: Border(
+                top: BorderSide(color: AppColors.glassBorder),
+              ),
+            ),
+            child: BottomNavigationBar(
+              currentIndex: _currentIndex,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              selectedItemColor: AppColors.cyanAccent,
+              unselectedItemColor: AppColors.textSecondary,
+              selectedFontSize: 12,
+              unselectedFontSize: 11,
+              type: BottomNavigationBarType.fixed,
+              onTap: (index) {
+                setState(() => _currentIndex = index);
+              },
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.translate_rounded),
+                  activeIcon: Icon(Icons.translate_rounded, color: AppColors.cyanAccent),
+                  label: 'Traducción',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.school_outlined),
+                  activeIcon: Icon(Icons.school_rounded, color: AppColors.cyanAccent),
+                  label: 'Enseñanza',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.settings_outlined),
+                  activeIcon: Icon(Icons.settings_rounded, color: AppColors.cyanAccent),
+                  label: 'Ajustes',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
