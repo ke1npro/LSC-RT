@@ -60,3 +60,9 @@ app.*.map.json
 __pycache__/
 requirements.txt
 plan.md
+fast_dtw.*
+*.dll
+*.so
+*.dylib
+*.o
+*.a
