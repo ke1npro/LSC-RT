@@ -26,5 +26,8 @@ class VisionRepositoryImpl implements IVisionRepository {
       _dataSource.processFrame(image, sensorOrientation);
 
   @override
+  void setRotation(int degrees) => _dataSource.setRotation(degrees);
+
+  @override
   Future<void> dispose() => _dataSource.dispose();
 }

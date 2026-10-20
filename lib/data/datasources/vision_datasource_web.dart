@@ -72,6 +72,9 @@ class PlatformVisionDataSource implements VisionDataSource {
   void processFrame(dynamic image, int sensorOrientation) {}
 
   @override
+  void setRotation(int degrees) {}
+
+  @override
   Future<void> dispose() async {
     _initialized = false;
     await _handSub?.cancel();

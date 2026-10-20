@@ -6,6 +6,7 @@ import '../../domain/entities/body_pose.dart';
 import '../../domain/entities/face_bounds.dart';
 import '../../domain/entities/hand_pose.dart';
 import '../../domain/entities/sign_prediction.dart';
+import '../../domain/repositories/i_settings_repository.dart';
 import '../../domain/repositories/i_sign_repository.dart';
 import '../../domain/repositories/i_vision_repository.dart';
 import '../../domain/usecases/calibrate_sign_usecase.dart';
@@ -16,6 +17,7 @@ class TranslationViewModel extends ChangeNotifier {
   final CameraDataSource cameraDataSource;
   final IVisionRepository visionRepository;
   final ISignRepository signRepository;
+  final ISettingsRepository? settingsRepository;
   final PredictSignUseCase predictSignUseCase;
   final CalibrateSignUseCase calibrateSignUseCase;
   final ResolveBodyPoseUseCase resolveBodyPoseUseCase;
@@ -42,6 +44,7 @@ class TranslationViewModel extends ChangeNotifier {
     required this.cameraDataSource,
     required this.visionRepository,
     required this.signRepository,
+    this.settingsRepository,
     required this.predictSignUseCase,
     required this.calibrateSignUseCase,
     required this.resolveBodyPoseUseCase,
@@ -67,6 +70,7 @@ class TranslationViewModel extends ChangeNotifier {
 
     await signRepository.initialize();
     await visionRepository.initialize();
+    visionRepository.setRotation(settingsRepository?.modelRotationDegrees ?? 90);
 
     await _handSubscription?.cancel();
     _handSubscription = visionRepository.handStream.listen(_onHandsDetected);

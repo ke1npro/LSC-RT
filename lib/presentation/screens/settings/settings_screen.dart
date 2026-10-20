@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../domain/repositories/i_vision_repository.dart';
 import '../../viewmodels/settings_viewmodel.dart';
 import '../../widgets/glass_top_bar.dart';
 
@@ -55,6 +56,20 @@ class SettingsScreen extends StatelessWidget {
                     value: settingsVm.showTeachingMediaPipeOverlay,
                     onChanged: (val) =>
                         settingsVm.setShowTeachingMediaPipeOverlay(val),
+                  ),
+                  const Divider(height: 1, color: AppColors.glassBorder),
+                  _buildRotationTile(
+                    context: context,
+                    icon: Icons.screen_rotation_outlined,
+                    iconColor: AppColors.cyanAccent,
+                    title: 'Orientación del Modelo (MediaPipe)',
+                    subtitle:
+                        'Compensa el ángulo del sensor para alinear el esqueleto con la pantalla.',
+                    currentValue: settingsVm.modelRotationDegrees,
+                    onChanged: (val) {
+                      settingsVm.setModelRotationDegrees(val);
+                      context.read<IVisionRepository>().setRotation(val);
+                    },
                   ),
                 ]),
 
@@ -251,6 +266,99 @@ class SettingsScreen extends StatelessWidget {
             fontWeight: FontWeight.bold,
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildRotationTile({
+    required BuildContext context,
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required int currentValue,
+    required ValueChanged<int> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(icon, color: iconColor, size: 22),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.glassBorder),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: currentValue,
+                isDense: true,
+                dropdownColor: AppColors.surface,
+                style: const TextStyle(
+                  color: AppColors.cyanAccent,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+                icon: const Icon(
+                  Icons.arrow_drop_down,
+                  color: AppColors.cyanAccent,
+                  size: 20,
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 90,
+                    child: Text('90° CW'),
+                  ),
+                  DropdownMenuItem(
+                    value: 0,
+                    child: Text('0° (Off)'),
+                  ),
+                  DropdownMenuItem(
+                    value: 180,
+                    child: Text('180°'),
+                  ),
+                  DropdownMenuItem(
+                    value: 270,
+                    child: Text('270°'),
+                  ),
+                ],
+                onChanged: (val) {
+                  if (val != null) onChanged(val);
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

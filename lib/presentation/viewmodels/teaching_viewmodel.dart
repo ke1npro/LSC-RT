@@ -5,6 +5,7 @@ import '../../data/datasources/camera_datasource.dart';
 import '../../domain/entities/body_pose.dart';
 import '../../domain/entities/face_bounds.dart';
 import '../../domain/entities/hand_pose.dart';
+import '../../domain/repositories/i_settings_repository.dart';
 import '../../domain/repositories/i_vision_repository.dart';
 import '../../domain/usecases/evaluate_posture_usecase.dart';
 import '../../domain/usecases/generate_wave_guide_usecase.dart';
@@ -13,6 +14,7 @@ import '../../domain/usecases/resolve_body_pose_usecase.dart';
 class TeachingViewModel extends ChangeNotifier {
   final CameraDataSource cameraDataSource;
   final IVisionRepository visionRepository;
+  final ISettingsRepository? settingsRepository;
   final ResolveBodyPoseUseCase resolveBodyPoseUseCase;
   final GenerateWaveGuideUseCase generateWaveGuideUseCase;
   final EvaluatePostureUseCase evaluatePostureUseCase;
@@ -33,6 +35,7 @@ class TeachingViewModel extends ChangeNotifier {
   TeachingViewModel({
     required this.cameraDataSource,
     required this.visionRepository,
+    this.settingsRepository,
     required this.resolveBodyPoseUseCase,
     required this.generateWaveGuideUseCase,
     required this.evaluatePostureUseCase,
@@ -50,6 +53,7 @@ class TeachingViewModel extends ChangeNotifier {
 
   Future<void> initialize() async {
     await visionRepository.initialize();
+    visionRepository.setRotation(settingsRepository?.modelRotationDegrees ?? 90);
 
     await _handSubscription?.cancel();
     _handSubscription = visionRepository.handStream.listen(_onHandsDetected);

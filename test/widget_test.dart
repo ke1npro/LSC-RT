@@ -136,8 +136,12 @@ void main() {
       expect(find.text('Overlay MediaPipe en Traducción'), findsOneWidget);
       expect(find.text('Detección y Visor Facial'), findsOneWidget);
       expect(find.text('Overlay MediaPipe en Enseñanza'), findsOneWidget);
+      expect(find.text('Orientación del Modelo (MediaPipe)'), findsOneWidget);
 
-      await tester.drag(find.byType(ListView), const Offset(0, -350));
+      await tester.scrollUntilVisible(
+        find.text('PRÓXIMAS FUNCIONALIDADES (HOJA DE RUTA)'),
+        200,
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('PRÓXIMAS FUNCIONALIDADES (HOJA DE RUTA)'), findsOneWidget);

@@ -22,6 +22,24 @@ class LocalStorageDataSource {
     }
   }
 
+  Future<int?> getInt(String key) async {
+    try {
+      final p = await _prefs;
+      return p.getInt(key);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<bool> setInt(String key, int value) async {
+    try {
+      final p = await _prefs;
+      return await p.setInt(key, value);
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<String?> getString(String key) async {
     try {
       final p = await _prefs;

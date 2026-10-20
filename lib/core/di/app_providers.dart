@@ -50,6 +50,7 @@ class AppProviders {
           cameraDataSource: cameraDataSource,
           visionRepository: visionRepo,
           signRepository: signRepo,
+          settingsRepository: settingsRepo,
           predictSignUseCase: predictUseCase,
           calibrateSignUseCase: calibrateUseCase,
           resolveBodyPoseUseCase: ResolveBodyPoseUseCase(),
@@ -59,6 +60,7 @@ class AppProviders {
         create: (_) => TeachingViewModel(
           cameraDataSource: cameraDataSource,
           visionRepository: visionRepo,
+          settingsRepository: settingsRepo,
           resolveBodyPoseUseCase: ResolveBodyPoseUseCase(),
           generateWaveGuideUseCase: waveUseCase,
           evaluatePostureUseCase: evaluateUseCase,

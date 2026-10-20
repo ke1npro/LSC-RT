@@ -21,6 +21,24 @@ class PlatformVisionDataSource implements VisionDataSource {
   int _frameCounter = 0;
   bool _initialized = false;
 
+  int _rotationDegrees = 90; // Default 90° horario para corregir el desvío 90° antihorario
+
+  static LandmarkPoint rotateLandmark(LandmarkPoint lm, int degrees) {
+    final deg = (degrees % 360 + 360) % 360;
+    switch (deg) {
+      case 90:
+        // Rotación de 90° en sentido horario (corrige la vista 90° antihoraria)
+        return LandmarkPoint(x: (1.0 - lm.y).clamp(0.0, 1.0), y: lm.x.clamp(0.0, 1.0), z: lm.z);
+      case 180:
+        return LandmarkPoint(x: (1.0 - lm.x).clamp(0.0, 1.0), y: (1.0 - lm.y).clamp(0.0, 1.0), z: lm.z);
+      case 270:
+        return LandmarkPoint(x: lm.y.clamp(0.0, 1.0), y: (1.0 - lm.x).clamp(0.0, 1.0), z: lm.z);
+      case 0:
+      default:
+        return lm;
+    }
+  }
+
   @override
   bool get isInitialized => _initialized;
 
@@ -29,6 +47,11 @@ class PlatformVisionDataSource implements VisionDataSource {
 
   @override
   Stream<List<FaceBounds>> get faceStream => _faceController.stream;
+
+  @override
+  void setRotation(int degrees) {
+    _rotationDegrees = (degrees % 360 + 360) % 360;
+  }
 
   @override
   Future<void> initialize() async {
@@ -46,11 +69,10 @@ class PlatformVisionDataSource implements VisionDataSource {
 
       _rawHandSub = _handLandmarkerPlugin?.landmarkStream.listen((rawHands) {
         final detected = rawHands.map((h) {
-          final landmarks = h.landmarks.map((lm) => LandmarkPoint(
-            x: lm.x,
-            y: lm.y,
-            z: 0.0,
-          )).toList();
+          final landmarks = h.landmarks.map((lm) {
+            final rawPoint = LandmarkPoint(x: lm.x, y: lm.y, z: lm.z);
+            return rotateLandmark(rawPoint, _rotationDegrees);
+          }).toList();
           return HandPose(landmarks: landmarks, confidence: 1.0);
         }).toList();
         _handController.add(detected);

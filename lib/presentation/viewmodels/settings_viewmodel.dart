@@ -10,6 +10,7 @@ class SettingsViewModel extends ChangeNotifier {
   bool get showFaceDetection => _settingsRepository.showFaceDetection;
   bool get showTeachingMediaPipeOverlay =>
       _settingsRepository.showTeachingMediaPipeOverlay;
+  int get modelRotationDegrees => _settingsRepository.modelRotationDegrees;
 
   Future<void> initialize() async {
     await _settingsRepository.initialize();
@@ -28,6 +29,11 @@ class SettingsViewModel extends ChangeNotifier {
 
   Future<void> setShowTeachingMediaPipeOverlay(bool value) async {
     await _settingsRepository.setShowTeachingMediaPipeOverlay(value);
+    notifyListeners();
+  }
+
+  Future<void> setModelRotationDegrees(int value) async {
+    await _settingsRepository.setModelRotationDegrees(value);
     notifyListeners();
   }
 }
