@@ -65,6 +65,10 @@ class _TeachingScreenState extends State<TeachingScreen>
           CameraViewport(
             controller: teachingVm.cameraDataSource.controller,
             isFrontCamera: teachingVm.isFrontCamera,
+            isSwitching: teachingVm.isCameraSwitching,
+            isPermissionDenied: teachingVm.isCameraPermissionDenied,
+            errorMessage: teachingVm.cameraErrorMessage,
+            onRetry: () => teachingVm.retryCamera(),
             onSizeChanged: (size) => teachingVm.setViewportSize(size),
             overlay: Stack(
               fit: StackFit.expand,

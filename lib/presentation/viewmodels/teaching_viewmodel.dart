@@ -51,6 +51,10 @@ class TeachingViewModel extends ChangeNotifier {
       cameraDataSource.currentCamera?.lensDirection ==
       CameraLensDirection.front;
 
+  bool get isCameraSwitching => cameraDataSource.isSwitching;
+  bool get isCameraPermissionDenied => cameraDataSource.isPermissionDenied;
+  String? get cameraErrorMessage => cameraDataSource.errorMessage;
+
   Future<void> initialize() async {
     await visionRepository.initialize();
     visionRepository.setRotation(settingsRepository?.modelRotationDegrees ?? 90);
@@ -61,20 +65,25 @@ class TeachingViewModel extends ChangeNotifier {
     await _faceSubscription?.cancel();
     _faceSubscription = visionRepository.faceStream.listen(_onFacesDetected);
 
-    if (cameraDataSource.cameras.isNotEmpty) {
-      try {
-        await cameraDataSource.initializeCamera(
-          onFrame: (image, orientation) {
-            visionRepository.processFrame(image, orientation);
-          },
-        );
-        _isInitialized = true;
-      } catch (e) {
-        debugPrint('Error inicializando cámara en TeachingViewModel: $e');
-      }
-    }
+    await cameraDataSource.initializeCamera(
+      onFrame: (image, orientation) {
+        visionRepository.processFrame(image, orientation);
+      },
+    );
+    _isInitialized = cameraDataSource.isInitialized;
 
     _updateGuidePose();
+    notifyListeners();
+  }
+
+  Future<void> retryCamera() async {
+    notifyListeners();
+    await cameraDataSource.initializeCamera(
+      onFrame: (image, orientation) {
+        visionRepository.processFrame(image, orientation);
+      },
+    );
+    _isInitialized = cameraDataSource.isInitialized;
     notifyListeners();
   }
 
@@ -87,8 +96,11 @@ class TeachingViewModel extends ChangeNotifier {
   }
 
   Future<void> switchCamera() async {
-    if (cameraDataSource.cameras.length < 2) return;
+    if (cameraDataSource.cameras.length < 2 || cameraDataSource.isSwitching) return;
     resolveBodyPoseUseCase.reset();
+    _userPose = null;
+    notifyListeners();
+
     await cameraDataSource.switchCamera(
       onFrame: (image, orientation) {
         visionRepository.processFrame(image, orientation);

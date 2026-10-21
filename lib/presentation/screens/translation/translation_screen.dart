@@ -38,10 +38,14 @@ class _TranslationScreenState extends State<TranslationScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Visor de Cámara con BodyPosePainter reactivo
+          // 1. Visor de Cámara con BodyPosePainter reactivo y manejo de degradación
           CameraViewport(
             controller: translationVm.cameraDataSource.controller,
             isFrontCamera: translationVm.isFrontCamera,
+            isSwitching: translationVm.isCameraSwitching,
+            isPermissionDenied: translationVm.isCameraPermissionDenied,
+            errorMessage: translationVm.cameraErrorMessage,
+            onRetry: () => translationVm.retryCamera(),
             onSizeChanged: (size) => translationVm.setViewportSize(size),
             overlay: CustomPaint(
               size: Size.infinite,

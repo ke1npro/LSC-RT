@@ -59,6 +59,10 @@ class TranslationViewModel extends ChangeNotifier {
       cameraDataSource.currentCamera?.lensDirection ==
       CameraLensDirection.front;
 
+  bool get isCameraSwitching => cameraDataSource.isSwitching;
+  bool get isCameraPermissionDenied => cameraDataSource.isPermissionDenied;
+  String? get cameraErrorMessage => cameraDataSource.errorMessage;
+
   bool get isCalibrating => _isCalibrating;
   String get targetLetter => _targetLetter;
   int get calibrationSamplesCount => _calibrationBuffer.length;
@@ -78,22 +82,37 @@ class TranslationViewModel extends ChangeNotifier {
     await _faceSubscription?.cancel();
     _faceSubscription = visionRepository.faceStream.listen(_onFacesDetected);
 
-    if (cameraDataSource.cameras.isNotEmpty) {
-      _statusMessage = 'Inicializando cámara...';
-      notifyListeners();
-      try {
-        await cameraDataSource.initializeCamera(
-          onFrame: (image, orientation) {
-            visionRepository.processFrame(image, orientation);
-          },
-        );
-        _isInitialized = true;
-        _statusMessage = 'LSC RT listo';
-      } catch (e) {
-        _statusMessage = 'Error al abrir cámara: $e';
-      }
+    _statusMessage = 'Inicializando cámara...';
+    notifyListeners();
+
+    await cameraDataSource.initializeCamera(
+      onFrame: (image, orientation) {
+        visionRepository.processFrame(image, orientation);
+      },
+    );
+
+    if (cameraDataSource.isInitialized) {
+      _isInitialized = true;
+      _statusMessage = 'LSC RT listo';
     } else {
-      _statusMessage = 'No se encontraron cámaras';
+      _statusMessage = cameraDataSource.errorMessage ?? 'Error al conectar cámara';
+    }
+    notifyListeners();
+  }
+
+  Future<void> retryCamera() async {
+    _statusMessage = 'Reintentando conexión con la cámara...';
+    notifyListeners();
+    await cameraDataSource.initializeCamera(
+      onFrame: (image, orientation) {
+        visionRepository.processFrame(image, orientation);
+      },
+    );
+    if (cameraDataSource.isInitialized) {
+      _isInitialized = true;
+      _statusMessage = 'LSC RT listo';
+    } else {
+      _statusMessage = cameraDataSource.errorMessage ?? 'Error al conectar cámara';
     }
     notifyListeners();
   }
@@ -105,8 +124,12 @@ class TranslationViewModel extends ChangeNotifier {
   }
 
   Future<void> switchCamera() async {
-    if (cameraDataSource.cameras.length < 2) return;
+    if (cameraDataSource.cameras.length < 2 || cameraDataSource.isSwitching) return;
     resolveBodyPoseUseCase.reset();
+    _currentPrediction = null;
+    _currentPose = null;
+    notifyListeners();
+
     await cameraDataSource.switchCamera(
       onFrame: (image, orientation) {
         visionRepository.processFrame(image, orientation);

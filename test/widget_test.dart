@@ -16,6 +16,7 @@ import 'package:sign_language_app/domain/usecases/predict_sign_usecase.dart';
 import 'package:sign_language_app/domain/usecases/resolve_body_pose_usecase.dart';
 import 'package:sign_language_app/main.dart';
 import 'package:sign_language_app/presentation/screens/settings/settings_screen.dart';
+import 'package:sign_language_app/presentation/widgets/camera_viewport.dart';
 
 void main() {
   setUp(() {
@@ -146,6 +147,47 @@ void main() {
 
       expect(find.text('PRÓXIMAS FUNCIONALIDADES (HOJA DE RUTA)'), findsOneWidget);
       expect(find.text('Texto a Voz en Tiempo Real (TTS)'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('CameraViewport gracefully displays permission denied without crash', (WidgetTester tester) async {
+      bool retried = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: Scaffold(
+            body: CameraViewport(
+              controller: null,
+              isPermissionDenied: true,
+              onRetry: () => retried = true,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Permiso de Cámara Denegado'), findsOneWidget);
+      expect(find.text('Reintentar Conexión'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Reintentar Conexión'));
+      expect(retried, isTrue);
+    });
+
+    testWidgets('CameraViewport displays switching transition state cleanly', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: const Scaffold(
+            body: CameraViewport(
+              controller: null,
+              isSwitching: true,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Cambiando de cámara...'), findsOneWidget);
+      expect(find.text('Alineando nuevo sensor de video'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
