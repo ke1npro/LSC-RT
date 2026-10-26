@@ -57,7 +57,7 @@ class TeachingViewModel extends ChangeNotifier {
 
   Future<void> initialize() async {
     await visionRepository.initialize();
-    visionRepository.setRotation(settingsRepository?.modelRotationDegrees ?? 90);
+    visionRepository.setRotation(settingsRepository?.modelRotationDegrees ?? 270);
 
     await _handSubscription?.cancel();
     _handSubscription = visionRepository.handStream.listen(_onHandsDetected);

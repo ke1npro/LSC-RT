@@ -12,7 +12,7 @@ class SettingsRepositoryImpl implements ISettingsRepository {
   bool _showMediaPipeOverlay = true;
   bool _showFaceDetection = true;
   bool _showTeachingMediaPipeOverlay = true;
-  int _modelRotationDegrees = 90; // Por defecto 90° horario para corregir el desvío de 90° antihorario (CCW)
+  int _modelRotationDegrees = 270; // Por defecto 270° para orientación vertical correcta sin inversión
 
   SettingsRepositoryImpl(this._localStorage);
 
@@ -37,7 +37,7 @@ class SettingsRepositoryImpl implements ISettingsRepository {
     _showTeachingMediaPipeOverlay =
         (await _localStorage.getBool(_keyShowTeachingOverlay)) ?? true;
     _modelRotationDegrees =
-        (await _localStorage.getInt(_keyModelRotation)) ?? 90;
+        (await _localStorage.getInt(_keyModelRotation)) ?? 270;
   }
 
   @override

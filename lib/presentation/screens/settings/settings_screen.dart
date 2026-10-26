@@ -336,6 +336,10 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 items: const [
                   DropdownMenuItem(
+                    value: 270,
+                    child: Text('270° (Defecto)'),
+                  ),
+                  DropdownMenuItem(
                     value: 90,
                     child: Text('90° CW'),
                   ),
@@ -346,10 +350,6 @@ class SettingsScreen extends StatelessWidget {
                   DropdownMenuItem(
                     value: 180,
                     child: Text('180°'),
-                  ),
-                  DropdownMenuItem(
-                    value: 270,
-                    child: Text('270°'),
                   ),
                 ],
                 onChanged: (val) {

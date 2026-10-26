@@ -21,7 +21,7 @@ class PlatformVisionDataSource implements VisionDataSource {
   int _frameCounter = 0;
   bool _initialized = false;
 
-  int _rotationDegrees = 90; // Default 90° horario para corregir el desvío 90° antihorario
+  int _rotationDegrees = 270; // Por defecto 270° para orientación vertical correcta sin inversión (dedos arriba)
 
   static LandmarkPoint rotateLandmark(LandmarkPoint lm, int degrees) {
     final deg = (degrees % 360 + 360) % 360;
