@@ -11,6 +11,7 @@ import '../entities/landmark_point.dart';
 class ResolveBodyPoseUseCase {
   LandmarkPoint? _prevShoulder;
   LandmarkPoint? _prevElbow;
+  LandmarkPoint? _prevSternum;
   FaceBounds? _lastKnownFace;
   DateTime? _lastFaceTime;
   bool _isRightArm = true;
@@ -18,6 +19,7 @@ class ResolveBodyPoseUseCase {
   void reset() {
     _prevShoulder = null;
     _prevElbow = null;
+    _prevSternum = null;
     _lastKnownFace = null;
     _lastFaceTime = null;
   }
@@ -56,11 +58,11 @@ class ResolveBodyPoseUseCase {
       final midDx = (middleBase.x - 0.5) * logicalWidth;
       final midDy = (middleBase.y - 0.5) * logicalHeight;
 
-      // 2. Anclaje de Torso, Esternón y Hombro
-      final double sternumDx;
-      final double sternumDy;
+      // 2. Anclaje de Torso, Esternón y Hombro Base
+      final double baseSternumDx;
+      final double baseSternumDy;
       final double shoulderSpan;
-      final double shoulderLevelY;
+      final double baseShoulderLevelY;
 
       if (effectiveFace != null) {
         final fcX = (effectiveFace.centerX - 0.5) * logicalWidth;
@@ -68,39 +70,25 @@ class ResolveBodyPoseUseCase {
         final fw = effectiveFace.width * logicalWidth;
         final fh = effectiveFace.height * logicalHeight;
 
-        sternumDx = fcX;
-        sternumDy = fcY + (fh * 0.82);
+        baseSternumDx = fcX;
+        baseSternumDy = fcY + (fh * 0.82);
         shoulderSpan = fw * 1.30;
-        shoulderLevelY = fcY + (fh * 0.72);
+        baseShoulderLevelY = fcY + (fh * 0.72);
       } else {
-        sternumDx = 0.0;
-        sternumDy = logicalHeight * 0.06;
+        baseSternumDx = 0.0;
+        baseSternumDy = logicalHeight * 0.06;
         shoulderSpan = logicalWidth * 0.22;
-        shoulderLevelY = logicalHeight * 0.02;
+        baseShoulderLevelY = logicalHeight * 0.02;
       }
 
       // 3. Lateralidad con Histéresis de 35px
       final handMidX = (wristDx + midDx) / 2;
-      final distFromMidline = handMidX - sternumDx;
+      final distFromMidline = handMidX - baseSternumDx;
       if (distFromMidline > 35) {
         _isRightArm = true;
       } else if (distFromMidline < -35) {
         _isRightArm = false;
       }
-
-      final targetShoulderX = sternumDx + (_isRightArm ? shoulderSpan : -shoulderSpan);
-      final targetShoulderY = shoulderLevelY;
-
-      final LandmarkPoint shoulder;
-      if (_prevShoulder == null) {
-        shoulder = LandmarkPoint(x: targetShoulderX, y: targetShoulderY);
-      } else {
-        shoulder = LandmarkPoint(
-          x: _lerp(_prevShoulder!.x, targetShoulderX, 0.35),
-          y: _lerp(_prevShoulder!.y, targetShoulderY, 0.35),
-        );
-      }
-      _prevShoulder = shoulder;
 
       // 4. Longitudes antropométricas fisiológicas
       final handVecX = midDx - wristDx;
@@ -119,7 +107,64 @@ class ResolveBodyPoseUseCase {
         lForearm = handLen * 2.1;
       }
 
-      // 5. Cinemática Inversa de 2 Huesos (Two-Bone Inverse Kinematics)
+      // 5. Cinemática Dinámica de Hombro y Clavícula (Ritmo Escapulohumeral)
+      // El hombro no es un punto estático; se eleva, protrae y extiende con el movimiento de la mano
+      final double baseShoulderX = baseSternumDx + (_isRightArm ? shoulderSpan : -shoulderSpan);
+      final double baseShoulderY = baseShoulderLevelY;
+
+      final double reachX = wristDx - baseShoulderX;
+      final double reachY = wristDy - baseShoulderY;
+      final double reachDist = math.sqrt(reachX * reachX + reachY * reachY);
+
+      // Elevación clavicular (cuando la mano asciende o desciende respecto al pecho)
+      final double clavicleElevation = (reachY < 0)
+          ? (reachY * 0.22).clamp(-shoulderSpan * 0.45, 0.0)
+          : (reachY * 0.08).clamp(0.0, shoulderSpan * 0.20);
+
+      // Protracción/retracción horizontal (alcance lateral o cruce del pecho)
+      final double clavicleProtraction =
+          (reachX * 0.15).clamp(-shoulderSpan * 0.35, shoulderSpan * 0.35);
+
+      // Compensación de estiramiento cuando el brazo alcanza su cota máxima
+      final double maxReachThreshold = (lUpper + lForearm) * 0.75;
+      double stretchX = 0.0;
+      double stretchY = 0.0;
+      if (reachDist > maxReachThreshold && reachDist > 0.001) {
+        final double stretchMag = (reachDist - maxReachThreshold) * 0.25;
+        stretchX = (reachX / reachDist) * stretchMag;
+        stretchY = (reachY / reachDist) * stretchMag;
+      }
+
+      final double targetShoulderX = baseShoulderX + clavicleProtraction + stretchX;
+      final double targetShoulderY = baseShoulderY + clavicleElevation + stretchY;
+
+      final double targetSternumX = baseSternumDx + (clavicleProtraction * 0.35) + (stretchX * 0.2);
+      final double targetSternumY = baseSternumDy + (clavicleElevation * 0.3) + (stretchY * 0.2);
+
+      // Suavizado temporal reactivo (0.45)
+      final LandmarkPoint shoulder;
+      if (_prevShoulder == null) {
+        shoulder = LandmarkPoint(x: targetShoulderX, y: targetShoulderY);
+      } else {
+        shoulder = LandmarkPoint(
+          x: _lerp(_prevShoulder!.x, targetShoulderX, 0.45),
+          y: _lerp(_prevShoulder!.y, targetShoulderY, 0.45),
+        );
+      }
+      _prevShoulder = shoulder;
+
+      final LandmarkPoint sternum;
+      if (_prevSternum == null) {
+        sternum = LandmarkPoint(x: targetSternumX, y: targetSternumY);
+      } else {
+        sternum = LandmarkPoint(
+          x: _lerp(_prevSternum!.x, targetSternumX, 0.45),
+          y: _lerp(_prevSternum!.y, targetSternumY, 0.45),
+        );
+      }
+      _prevSternum = sternum;
+
+      // 6. Cinemática Inversa de 2 Huesos (Two-Bone Inverse Kinematics)
       final toWristX = wristDx - shoulder.x;
       final toWristY = wristDy - shoulder.y;
       final rawDist = math.sqrt(toWristX * toWristX + toWristY * toWristY);
@@ -190,7 +235,7 @@ class ResolveBodyPoseUseCase {
           wrist: LandmarkPoint(x: wristDx, y: wristDy),
           elbow: elbow,
           shoulder: shoulder,
-          sternum: LandmarkPoint(x: sternumDx, y: sternumDy),
+          sternum: sternum,
           isRightArm: _isRightArm,
         ),
       );

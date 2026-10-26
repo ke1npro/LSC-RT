@@ -73,6 +73,36 @@ void main() {
       expect(arm.sternum, isNotNull);
     });
 
+    test('ResolveBodyPoseUseCase dynamically updates shoulder position with hand elevation', () {
+      final useCase = ResolveBodyPoseUseCase();
+      // Mano en posición baja
+      final lowHand = HandPose(
+        landmarks: List.generate(21, (i) => LandmarkPoint(x: 0.60, y: 0.70 + i * 0.005)),
+      );
+      final poseLow = useCase.execute(
+        hands: [lowHand],
+        faces: [],
+        logicalWidth: 400,
+        logicalHeight: 800,
+      );
+      final shoulderLowY = poseLow.arms.first.shoulder.y;
+
+      // Mano en posición elevada
+      final highHand = HandPose(
+        landmarks: List.generate(21, (i) => LandmarkPoint(x: 0.60, y: 0.20 + i * 0.005)),
+      );
+      final poseHigh = useCase.execute(
+        hands: [highHand],
+        faces: [],
+        logicalWidth: 400,
+        logicalHeight: 800,
+      );
+      final shoulderHighY = poseHigh.arms.first.shoulder.y;
+
+      // Al elevar la mano, el hombro debe elevarse (menor Y en coordenadas de pantalla)
+      expect(shoulderHighY, lessThan(shoulderLowY));
+    });
+
     test('GenerateWaveGuideUseCase generates valid wave arm and 21 landmarks', () {
       final useCase = GenerateWaveGuideUseCase();
       final guide = useCase.execute(animationProgress: 0.25, viewportWidth: 400);
