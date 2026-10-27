@@ -72,15 +72,23 @@ def parse_text_to_sign_sequence(input_text, motion_bank):
     norm = normalize_text(input_text)
     matched_signs = []
 
-    # Buscar coincidencias con regex ordenadas por posición en el texto
+    # Buscar coincidencias con las 50 señas del banco canónico
     matches = []
-    for pattern, sign_key in TEXT_SYNONYMS:
-        for m in re.finditer(pattern, norm):
-            matches.append((m.start(), sign_key))
+    for sign_key, sign_info in motion_bank.items():
+        disp = normalize_text(sign_info.get('display_name', ''))
+        raw_key = sign_key.replace('_', ' ')
+        patterns = [disp, raw_key]
+        for pat in patterns:
+            if not pat:
+                continue
+            idx = norm.find(pat)
+            if idx != -1:
+                matches.append((idx, len(pat), sign_key))
 
-    matches.sort(key=lambda x: x[0])
-    for _, sign_key in matches:
-        if sign_key in motion_bank and sign_key not in matched_signs:
+    # Ordenar por posición en el texto y longitud (preferir frases más largas)
+    matches.sort(key=lambda x: (x[0], -x[1]))
+    for _, _, sign_key in matches:
+        if sign_key not in matched_signs:
             matched_signs.append(sign_key)
 
     # Si no hubo match por regex, buscar palabras clave directas

@@ -3,14 +3,16 @@
 generate_html_player.py
 
 Genera un visor web interactivo 'avatar_training_viewer.html' que contiene
-el reproductor del Avatar pedagógico LSC en Canvas HTML5.
+el reproductor del Avatar pedagógico LSC en Canvas HTML5 con soporte completo
+para el vocabulario de 50 señas del dataset LSC50.
 
 Características:
-1. Incluye el Motion Bank canónico embebido (cero problemas de CORS al abrir localmente).
+1. Incluye el Motion Bank canónico de 50 señas embebido (cero problemas de CORS).
 2. Reproduce a 60 FPS con interpolación temporal suave (sub-frame lerp).
-3. Permite escribir texto en tiempo real o seleccionar entre 'Gracias', 'Buenos días', 'Buenas tardes' y 'Buenas noches'.
-4. Controles de velocidad didáctica (0.25x, 0.5x, 1x), pausa y barra de desplazamiento (scrubber).
-5. Visualización de estela cinemática (Motion Trail) y marcas pedagógicas del ápex.
+3. Selector dinámico de 50 señas con filtrado por categorías y buscador por texto.
+4. Motor de síntesis de oraciones en tiempo real (encadena señas reconocidas con transiciones Hermite).
+5. Controles didácticos de velocidad (0.25x, 0.5x, 1x), pausa, scrubber y estela luminosa.
+6. Ficha pedagógica dinámica con ápex, instrucciones y tipo de seña (unimanual/bimanual).
 """
 
 import os
@@ -32,7 +34,7 @@ def generate_viewer():
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Avatar Tutor LSC - Texto a Señas y Entrenamiento</title>
+  <title>Avatar Tutor LSC - 50 Señas Canónicas</title>
   <style>
     :root {{
       --bg: #0e0f12;
@@ -162,55 +164,100 @@ def generate_viewer():
       cursor: pointer;
     }}
     .speed-select {{
-      background: #20232c;
-      color: var(--text);
-      border: 1px solid var(--panel-border);
-      padding: 4px 8px;
+      background: #2a2e3d;
+      border: 1px solid #3c4257;
+      color: #fff;
+      padding: 6px 10px;
       border-radius: 6px;
-      font-size: 0.78rem;
+      font-size: 0.82rem;
+      cursor: pointer;
     }}
     .sidebar {{
-      width: 360px;
+      width: 420px;
       background: var(--panel);
       border-left: 1px solid var(--panel-border);
       display: flex;
       flex-direction: column;
-      padding: 20px;
-      gap: 20px;
+      padding: 18px;
+      gap: 16px;
       overflow-y: auto;
     }}
     .section-title {{
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       color: var(--text-muted);
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }}
+    .search-box {{
+      width: 100%;
+      background: #111318;
+      border: 1px solid var(--panel-border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      outline: none;
       margin-bottom: 8px;
     }}
-    .sign-buttons {{
+    .search-box:focus {{
+      border-color: var(--accent-cyan);
+    }}
+    .categories-bar {{
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+      margin-bottom: 8px;
+    }}
+    .cat-pill {{
+      background: #1e222d;
+      border: 1px solid #2e3547;
+      color: var(--text-muted);
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }}
+    .cat-pill.active, .cat-pill:hover {{
+      background: rgba(79, 172, 254, 0.2);
+      border-color: var(--accent-cyan);
+      color: #fff;
+    }}
+    .sign-list-scroll {{
+      max-height: 220px;
+      overflow-y: auto;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      gap: 6px;
+      padding-right: 4px;
     }}
     .btn-sign {{
       background: #1e222d;
       border: 1px solid #2e3547;
       color: var(--text);
-      padding: 12px 10px;
-      border-radius: 8px;
-      font-size: 0.82rem;
+      padding: 8px 8px;
+      border-radius: 6px;
+      font-size: 0.78rem;
       font-weight: 600;
       cursor: pointer;
       text-align: left;
-      transition: all 0.2s;
+      transition: all 0.15s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }}
     .btn-sign:hover {{
       border-color: var(--accent-cyan);
       background: #252a38;
-      transform: translateY(-1px);
     }}
     .btn-sign.active {{
-      background: linear-gradient(135deg, rgba(79, 172, 254, 0.2) 0%, rgba(0, 242, 254, 0.2) 100%);
+      background: linear-gradient(135deg, rgba(79, 172, 254, 0.25) 0%, rgba(0, 242, 254, 0.25) 100%);
       border-color: var(--accent-cyan);
       color: #fff;
     }}
@@ -220,28 +267,28 @@ def generate_viewer():
       gap: 8px;
     }}
     .text-input-box textarea {{
-      background: #12141a;
-      border: 1px solid #2e3547;
-      color: #fff;
-      padding: 10px;
+      background: #101217;
+      border: 1px solid var(--panel-border);
       border-radius: 8px;
+      padding: 10px;
+      color: var(--text);
       font-family: inherit;
-      font-size: 0.85rem;
-      resize: none;
-      height: 70px;
+      font-size: 0.82rem;
+      resize: vertical;
+      min-height: 60px;
+      outline: none;
     }}
     .text-input-box textarea:focus {{
-      outline: none;
       border-color: var(--accent-cyan);
     }}
     .btn-synthesize {{
-      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
       border: none;
-      color: #0b0c10;
+      color: #000;
       padding: 10px;
-      border-radius: 8px;
+      border-radius: 6px;
       font-weight: 700;
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       cursor: pointer;
       transition: opacity 0.2s;
     }}
@@ -249,24 +296,22 @@ def generate_viewer():
       opacity: 0.9;
     }}
     .card-instructions {{
-      background: #191c24;
-      border: 1px solid #282e3e;
-      border-radius: 8px;
+      background: #1a1e27;
+      border: 1px solid #2d3446;
+      border-radius: 10px;
       padding: 14px;
-      font-size: 0.82rem;
-      line-height: 1.45;
+      font-size: 0.8rem;
     }}
     .card-instructions h4 {{
-      color: var(--accent-gold);
-      font-size: 0.82rem;
+      color: var(--accent-cyan);
       margin-bottom: 6px;
+      font-size: 0.9rem;
     }}
     .trail-toggle {{
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: 0.8rem;
-      color: var(--text-muted);
+      gap: 6px;
+      font-size: 0.82rem;
       cursor: pointer;
     }}
     .trail-toggle input {{
@@ -278,17 +323,17 @@ def generate_viewer():
 
   <header>
     <div class="title-box">
-      <h1>Avatar Tutor LSC - Visualizador Interactivo</h1>
-      <p>Síntesis de Texto a Avatar y Aprendizaje de Señas con Datos Reales</p>
+      <h1>Avatar Tutor LSC - 50 Señas Canónicas</h1>
+      <p>Visualizador Interactivo y Síntesis de Texto con Datos Reales LSC50</p>
     </div>
-    <div class="badge-branch">Rama: WindowsTest</div>
+    <div class="badge-branch">Rama: WindowsTest | 50 Master CSVs</div>
   </header>
 
   <main>
     <div class="viewport-container">
       <div class="hud-overlay">
         <span id="hud-sign-name">SEÑA: GRACIAS</span>
-        <span class="phase-tag" id="hud-phase">EJECUCIÓN</span>
+        <span class="phase-tag" id="hud-phase">ACTIVO</span>
       </div>
 
       <canvas id="avatarCanvas" width="960" height="720"></canvas>
@@ -311,42 +356,46 @@ def generate_viewer():
 
     <aside class="sidebar">
       <div>
-        <div class="section-title">Señas del Módulo de Entrenamiento</div>
-        <div class="sign-buttons">
-          <button class="btn-sign active" onclick="playSingleSign('gracias')">GRACIAS</button>
-          <button class="btn-sign" onclick="playSingleSign('buenos_dias')">BUENOS DÍAS</button>
-          <button class="btn-sign" onclick="playSingleSign('buenas_tardes')">BUENAS TARDES</button>
-          <button class="btn-sign" onclick="playSingleSign('buenas_noches')">BUENAS NOCHES</button>
+        <div class="section-title">
+          <span>Catálogo de 50 Señas</span>
+          <span id="sign-count-badge" style="color: var(--accent-cyan); font-size: 0.75rem;">50 señas</span>
         </div>
+        <input type="text" class="search-box" id="searchSign" placeholder="Buscar entre las 50 señas..." oninput="renderSignList()">
+        
+        <div class="categories-bar" id="categoriesBar"></div>
+        <div class="sign-list-scroll" id="signButtonsContainer"></div>
       </div>
 
       <div class="text-input-box">
         <div class="section-title">Síntesis Texto a Avatar</div>
-        <textarea id="txtInput" placeholder="Ej: Buenos días, muchas gracias...">Buenos días, muchas gracias</textarea>
+        <textarea id="txtInput" placeholder="Escribe palabras en LSC, ej: Hola, buenos días, ¿cómo estás?, gracias...">Buenos días, muchas gracias</textarea>
         <button class="btn-synthesize" onclick="synthesizeFromInput()">Traducir a Avatar</button>
       </div>
 
       <div class="card-instructions">
         <h4 id="inst-title">Mecánica del Gesto: GRACIAS</h4>
         <p id="inst-body" style="color: #cbd3e1; margin-bottom: 8px;">
-          Mano dominante plana con los dedos juntos. Las yemas tocan la barbilla/mentón y luego descienden suavemente hacia adelante en plano sagital.
+          Gesto de cortesía con mano dominante. Sigue la estela hasta el ápex.
+        </p>
+        <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">
+          <strong>Tipo:</strong> <span id="inst-type" style="color: var(--accent-cyan);">Unimanual</span> | 
+          <strong>Categoría:</strong> <span id="inst-cat" style="color: var(--accent-green);">Cortesía</span>
         </p>
         <p style="font-size: 0.75rem; color: var(--text-muted);">
-          <strong>Ápex clave:</strong> <span id="inst-apex" style="color: var(--accent-cyan);">Contacto de las yemas con el mentón</span>
+          <strong>Ápex clave:</strong> <span id="inst-apex" style="color: var(--accent-gold);">Máxima extensión / contacto</span>
         </p>
       </div>
 
       <div class="card-instructions" style="background: #141720; border-color: #212636;">
-        <h4 style="color: var(--accent-cyan); margin-bottom: 4px;">Arquitectura Cinemática</h4>
-        <p style="font-size: 0.75rem; color: #8e95a5;">
-          Los movimientos reproducidos provienen directamente de las capturas MediaPipe Tasks del dataset LSC50, normalizadas respecto a la distancia interhumeral ($D_{{\\text{{hombros}}}}$) y centradas en el esternón.
+        <h4 style="color: var(--accent-cyan); margin-bottom: 4px;">Arquitectura de Consenso</h4>
+        <p style="font-size: 0.73rem; color: #8e95a5;">
+          Cada seña proviene de un Master CSV generado por fusión con Trimmed Mean al 20% sobre 20 tomas de 5 señantes en MediaPipe Tasks, eliminando oclusiones con 100% de presencia articular.
         </p>
       </div>
     </aside>
   </main>
 
   <script>
-    // Banco canónico de señas embebido
     const MOTION_BANK = {motion_bank_json_str};
 
     const HAND_CONNECTIONS = [
@@ -358,144 +407,158 @@ def generate_viewer():
       [5, 9], [9, 13], [13, 17]
     ];
 
-    const NEUTRAL_REST = {{
-      torso: {{
-        nose: [0.50, 0.22, 0.0],
-        left_shoulder: [0.38, 0.38, 0.0],
-        right_shoulder: [0.62, 0.38, 0.0],
-        left_elbow: [0.34, 0.58, 0.0],
-        right_elbow: [0.66, 0.58, 0.0],
-        left_wrist: [0.35, 0.78, 0.0],
-        right_wrist: [0.65, 0.78, 0.0]
-      }},
-      left_hand: [],
-      right_hand: []
-    }};
-
+    let currentSelectedSignId = 'gracias';
+    let currentCategoryFilter = 'TODAS';
     let currentSequence = [];
     let currentAnnotations = [];
     let currentFrameIndex = 0;
     let isPlaying = true;
     let playbackSpeed = 0.5;
     let trailPoints = [];
-    let lastTimestamp = 0;
-    let accumulatedTime = 0;
+    const maxTrailLength = 16;
+    let lastRenderTime = 0;
+    const targetFPS = 60;
+    const frameInterval = 1000 / targetFPS;
 
     const canvas = document.getElementById('avatarCanvas');
     const ctx = canvas.getContext('2d');
     const scrubber = document.getElementById('scrubber');
-    const btnPlayPause = document.getElementById('btnPlayPause');
     const timeDisplay = document.getElementById('time-display');
+    const btnPlayPause = document.getElementById('btnPlayPause');
 
-    function interpolateFrames(fa, fb, t) {{
-      const ease = t * t * (3.0 - 2.0 * t);
-      const res = {{ torso: {{}}, left_hand: [], right_hand: [] }};
+    // Inicializar Categorías
+    function initCategories() {{
+      const cats = new Set(['TODAS']);
+      for (const k in MOTION_BANK) {{
+        cats.add(MOTION_BANK[k].category.toUpperCase());
+      }}
+      const bar = document.getElementById('categoriesBar');
+      bar.innerHTML = '';
+      cats.forEach(cat => {{
+        const btn = document.createElement('button');
+        btn.className = 'cat-pill ' + (cat === 'TODAS' ? 'active' : '');
+        btn.innerText = cat;
+        btn.onclick = () => {{
+          document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('active'));
+          btn.classList.add('active');
+          currentCategoryFilter = cat;
+          renderSignList();
+        }};
+        bar.appendChild(btn);
+      }});
+    }}
 
-      for (let k in fa.torso) {{
-        res.torso[k] = [
-          (1 - ease) * fa.torso[k][0] + ease * fb.torso[k][0],
-          (1 - ease) * fa.torso[k][1] + ease * fb.torso[k][1],
-          (1 - ease) * fa.torso[k][2] + ease * fb.torso[k][2]
+    // Renderizar Lista de Señas con Filtros
+    function renderSignList() {{
+      const query = document.getElementById('searchSign').value.toLowerCase().trim();
+      const container = document.getElementById('signButtonsContainer');
+      container.innerHTML = '';
+
+      let count = 0;
+      for (const k in MOTION_BANK) {{
+        const sign = MOTION_BANK[k];
+        const matchCat = (currentCategoryFilter === 'TODAS' || sign.category.toUpperCase() === currentCategoryFilter);
+        const matchQuery = (sign.display_name.toLowerCase().includes(query) || k.includes(query));
+
+        if (matchCat && matchQuery) {{
+          count++;
+          const btn = document.createElement('button');
+          btn.className = 'btn-sign ' + (k === currentSelectedSignId ? 'active' : '');
+          btn.title = sign.display_name + ' (' + sign.category + ')';
+          btn.innerText = sign.display_name;
+          btn.onclick = () => playSingleSign(k);
+          container.appendChild(btn);
+        }}
+      }}
+      document.getElementById('sign-count-badge').innerText = count + ' señas';
+    }}
+
+    function interpolateFrames(fA, fB, alpha) {{
+      const w = alpha * alpha * (3.0 - 2.0 * alpha);
+      const resTorso = {{}};
+      for (const p in fA.torso) {{
+        resTorso[p] = [
+          (1 - w) * fA.torso[p][0] + w * fB.torso[p][0],
+          (1 - w) * fA.torso[p][1] + w * fB.torso[p][1],
+          (1 - w) * fA.torso[p][2] + w * fB.torso[p][2]
         ];
       }}
 
-      if (fa.right_hand.length === 21 && fb.right_hand.length === 21) {{
-        for (let i = 0; i < 21; i++) {{
-          res.right_hand.push([
-            (1 - ease) * fa.right_hand[i][0] + ease * fb.right_hand[i][0],
-            (1 - ease) * fa.right_hand[i][1] + ease * fb.right_hand[i][1],
-            (1 - ease) * fa.right_hand[i][2] + ease * fb.right_hand[i][2]
-          ]);
-        }}
-      }} else if (fb.right_hand.length === 21) {{
-        res.right_hand = fb.right_hand;
-      }} else {{
-        res.right_hand = fa.right_hand;
+      const resLH = [];
+      const resRH = [];
+      for (let k = 0; k < 21; k++) {{
+        resLH.push([
+          (1 - w) * fA.left_hand[k][0] + w * fB.left_hand[k][0],
+          (1 - w) * fA.left_hand[k][1] + w * fB.left_hand[k][1],
+          (1 - w) * fA.left_hand[k][2] + w * fB.left_hand[k][2]
+        ]);
+        resRH.push([
+          (1 - w) * fA.right_hand[k][0] + w * fB.right_hand[k][0],
+          (1 - w) * fA.right_hand[k][1] + w * fB.right_hand[k][1],
+          (1 - w) * fA.right_hand[k][2] + w * fB.right_hand[k][2]
+        ]);
       }}
 
-      if (fa.left_hand.length === 21 && fb.left_hand.length === 21) {{
-        for (let i = 0; i < 21; i++) {{
-          res.left_hand.push([
-            (1 - ease) * fa.left_hand[i][0] + ease * fb.left_hand[i][0],
-            (1 - ease) * fa.left_hand[i][1] + ease * fb.left_hand[i][1],
-            (1 - ease) * fa.left_hand[i][2] + ease * fb.left_hand[i][2]
-          ]);
-        }}
-      }} else if (fb.left_hand.length === 21) {{
-        res.left_hand = fb.left_hand;
-      }} else {{
-        res.left_hand = fa.left_hand;
-      }}
-
-      return res;
+      return {{ torso: resTorso, left_hand: resLH, right_hand: resRH }};
     }}
 
-    function buildMotion(signKeys) {{
+    function buildMotion(keys) {{
       const frames = [];
       const annots = [];
-      let current = NEUTRAL_REST;
-      const trans = 12;
 
-      signKeys.forEach(key => {{
-        const s = MOTION_BANK[key];
-        if (!s) return;
+      keys.forEach((key, sIdx) => {{
+        const sign = MOTION_BANK[key];
+        if (!sign) return;
 
-        // Transición de entrada
-        for (let i = 0; i < trans; i++) {{
-          frames.push(interpolateFrames(current, s.frames[0], (i + 1) / trans));
-          annots.push({{
-            sign: s.display_name,
-            phase: 'Preparación',
-            apex: false,
-            desc: s.pedagogical_metadata.instructions
-          }});
+        if (sIdx > 0 && frames.length > 0) {{
+          const lastF = frames[frames.length - 1];
+          const nextF = sign.frames[0];
+          const transFrames = 10;
+          for (let step = 0; step < transFrames; step++) {{
+            const alpha = (step + 1) / (transFrames + 1);
+            frames.push(interpolateFrames(lastF, nextF, alpha));
+            annots.push({{
+              sign: sign.display_name,
+              phase: 'TRANSICIÓN',
+              apex: false
+            }});
+          }}
         }}
 
-        // Frames de la seña
-        s.frames.forEach((f, idx) => {{
+        const apexF = sign.phases.apex_frame;
+        sign.frames.forEach((f, fIdx) => {{
           frames.push(f);
-          const isApex = Math.abs(idx - s.apex_frame) <= 2;
-          let ph = 'Ejecución';
-          if (isApex) ph = 'ÁPEX CLAVE';
-          else if (idx > s.apex_frame) ph = 'Culminación';
+          const isApex = (Math.abs(fIdx - apexF) <= 2);
+          let phaseName = 'ACTIVO';
+          if (fIdx < sign.phases.active_sign[0]) phaseName = 'PREPARACIÓN';
+          else if (fIdx > sign.phases.active_sign[1]) phaseName = 'RETORNO';
+          else if (isApex) phaseName = 'ÁPEX';
 
           annots.push({{
-            sign: s.display_name,
-            phase: ph,
-            apex: isApex,
-            desc: isApex ? s.pedagogical_metadata.apex_description : s.pedagogical_metadata.instructions
+            sign: sign.display_name,
+            phase: phaseName,
+            apex: isApex
           }});
         }});
-
-        current = s.frames[s.frames.length - 1];
       }});
-
-      // Transición final a reposo
-      for (let i = 0; i < trans; i++) {{
-        frames.push(interpolateFrames(current, NEUTRAL_REST, (i + 1) / trans));
-        annots.push({{
-          sign: 'REPOSO',
-          phase: 'Descanso',
-          apex: false,
-          desc: 'Regresando a postura neutral de reposo.'
-        }});
-      }}
 
       return {{ frames, annots }};
     }}
 
-    function playSingleSign(signKey) {{
-      document.querySelectorAll('.btn-sign').forEach(b => b.classList.remove('active'));
-      event.target.classList.add('active');
+    function playSingleSign(key) {{
+      currentSelectedSignId = key;
+      renderSignList();
 
-      const s = MOTION_BANK[signKey];
-      if (s) {{
-        document.getElementById('inst-title').innerText = 'Mecánica del Gesto: ' + s.display_name;
-        document.getElementById('inst-body').innerText = s.pedagogical_metadata.instructions;
-        document.getElementById('inst-apex').innerText = s.pedagogical_metadata.apex_description;
-      }}
+      const sign = MOTION_BANK[key];
+      if (!sign) return;
 
-      const res = buildMotion([signKey]);
+      document.getElementById('inst-title').innerText = 'Mecánica del Gesto: ' + sign.display_name;
+      document.getElementById('inst-body').innerText = sign.pedagogical_metadata.instructions;
+      document.getElementById('inst-type').innerText = sign.type.toUpperCase();
+      document.getElementById('inst-cat').innerText = sign.category;
+      document.getElementById('inst-apex').innerText = sign.pedagogical_metadata.apex_description;
+
+      const res = buildMotion([key]);
       currentSequence = res.frames;
       currentAnnotations = res.annots;
       currentFrameIndex = 0;
@@ -508,10 +571,14 @@ def generate_viewer():
       const text = document.getElementById('txtInput').value.toLowerCase();
       const keys = [];
 
-      if (text.includes('buenos') || text.includes('dias') || text.includes('días')) keys.push('buenos_dias');
-      if (text.includes('tardes')) keys.push('buenas_tardes');
-      if (text.includes('noches')) keys.push('buenas_noches');
-      if (text.includes('gracias')) keys.push('gracias');
+      // Mapear oraciones a claves de las 50 señas
+      for (const k in MOTION_BANK) {{
+        const sign = MOTION_BANK[k];
+        const disp = sign.display_name.toLowerCase().replace('¿', '').replace('?', '').replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u');
+        if (text.includes(disp) || text.includes(k.replace('_', ' '))) {{
+          keys.push(k);
+        }}
+      }}
 
       if (keys.length === 0) keys.push('gracias');
 
@@ -531,7 +598,6 @@ def generate_viewer():
       ctx.fillStyle = '#0f1117';
       ctx.fillRect(0, 0, W, H);
 
-      // Rejilla de perspectiva
       ctx.strokeStyle = '#1a1f2c';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -539,81 +605,100 @@ def generate_viewer():
       ctx.lineTo(W, H * 0.85);
       ctx.stroke();
 
-      const t = frameData.torso;
-      const pxTorso = {{}};
-      for (let k in t) {{
-        pxTorso[k] = [t[k][0] * W, t[k][1] * H];
+      const torso = frameData.torso;
+      const tPts = {{}};
+      for (const p in torso) {{
+        tPts[p] = [torso[p][0] * W, torso[p][1] * H];
       }}
 
       // Cabeza
-      if (pxTorso.nose) {{
-        const nx = pxTorso.nose[0];
-        const ny = pxTorso.nose[1] - 30;
-        ctx.fillStyle = '#222838';
-        ctx.strokeStyle = '#434d6b';
+      if (tPts.nose) {{
+        const nx = tPts.nose[0];
+        const ny = tPts.nose[1];
+        ctx.fillStyle = '#2d3345';
+        ctx.strokeStyle = '#4e5a7a';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.ellipse(nx, ny, 36, 48, 0, 0, Math.PI * 2);
+        ctx.ellipse(nx, ny - 30, 36, 48, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
-        // Ojos
-        ctx.fillStyle = '#64d2ff';
+        ctx.fillStyle = '#9fb7ff';
         ctx.beginPath();
-        ctx.arc(nx - 12, ny - 6, 3, 0, Math.PI * 2);
-        ctx.arc(nx + 12, ny - 6, 3, 0, Math.PI * 2);
+        ctx.arc(nx - 12, ny - 38, 3, 0, Math.PI * 2);
+        ctx.arc(nx + 12, ny - 38, 3, 0, Math.PI * 2);
         ctx.fill();
       }}
 
-      // Clavícula y Hombros
-      if (pxTorso.left_shoulder && pxTorso.right_shoulder) {{
-        const ls = pxTorso.left_shoulder;
-        const rs = pxTorso.right_shoulder;
+      // Torso y Brazos
+      if (tPts.left_shoulder && tPts.right_shoulder) {{
+        const ls = tPts.left_shoulder;
+        const rs = tPts.right_shoulder;
+        const midNeck = [(ls[0] + rs[0]) / 2, (ls[1] + rs[1]) / 2];
 
-        ctx.strokeStyle = '#ffb300';
+        if (tPts.nose) {{
+          ctx.strokeStyle = '#3e465e';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(midNeck[0], midNeck[1]);
+          ctx.lineTo(tPts.nose[0], tPts.nose[1]);
+          ctx.stroke();
+        }}
+
+        ctx.strokeStyle = '#00f2fe';
         ctx.lineWidth = 4;
         ctx.beginPath();
         ctx.moveTo(ls[0], ls[1]);
         ctx.lineTo(rs[0], rs[1]);
         ctx.stroke();
 
-        // Brazos
-        const drawArm = (s, e, w) => {{
-          if (!s || !e || !w) return;
-          ctx.strokeStyle = '#ffa000';
+        if (tPts.left_elbow && tPts.left_wrist) {{
+          ctx.strokeStyle = '#00c6ff';
           ctx.lineWidth = 3;
           ctx.beginPath();
-          ctx.moveTo(s[0], s[1]);
-          ctx.lineTo(e[0], e[1]);
-          ctx.lineTo(w[0], w[1]);
+          ctx.moveTo(ls[0], ls[1]);
+          ctx.lineTo(tPts.left_elbow[0], tPts.left_elbow[1]);
+          ctx.lineTo(tPts.left_wrist[0], tPts.left_wrist[1]);
           ctx.stroke();
 
-          ctx.fillStyle = '#ffd54f';
+          ctx.fillStyle = '#4facfe';
           ctx.beginPath();
-          ctx.arc(e[0], e[1], 6, 0, Math.PI * 2);
+          ctx.arc(tPts.left_elbow[0], tPts.left_elbow[1], 5, 0, Math.PI * 2);
           ctx.fill();
-        }};
+        }}
 
-        drawArm(pxTorso.left_shoulder, pxTorso.left_elbow, pxTorso.left_wrist);
-        drawArm(pxTorso.right_shoulder, pxTorso.right_elbow, pxTorso.right_wrist);
+        if (tPts.right_elbow && tPts.right_wrist) {{
+          ctx.strokeStyle = '#00c6ff';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(rs[0], rs[1]);
+          ctx.lineTo(tPts.right_elbow[0], tPts.right_elbow[1]);
+          ctx.lineTo(tPts.right_wrist[0], tPts.right_wrist[1]);
+          ctx.stroke();
 
-        ctx.fillStyle = '#ffca28';
+          ctx.fillStyle = '#4facfe';
+          ctx.beginPath();
+          ctx.arc(tPts.right_elbow[0], tPts.right_elbow[1], 5, 0, Math.PI * 2);
+          ctx.fill();
+        }}
+
+        ctx.fillStyle = '#00f2fe';
         ctx.beginPath();
-        ctx.arc(ls[0], ls[1], 8, 0, Math.PI * 2);
-        ctx.arc(rs[0], rs[1], 8, 0, Math.PI * 2);
+        ctx.arc(ls[0], ls[1], 7, 0, Math.PI * 2);
+        ctx.arc(rs[0], rs[1], 7, 0, Math.PI * 2);
         ctx.fill();
       }}
 
-      // Estela (Motion Trail)
-      if (document.getElementById('chkTrail').checked && frameData.right_hand.length === 21) {{
-        const rw = [frameData.right_hand[0][0] * W, frameData.right_hand[0][1] * H];
-        trailPoints.push(rw);
-        if (trailPoints.length > 18) trailPoints.shift();
+      // Estela luminosa
+      if (document.getElementById('chkTrail').checked && frameData.right_hand && frameData.right_hand.length === 21) {{
+        const rWrist = frameData.right_hand[0];
+        trailPoints.push([rWrist[0] * W, rWrist[1] * H]);
+        if (trailPoints.length > maxTrailLength) trailPoints.shift();
 
         for (let i = 1; i < trailPoints.length; i++) {{
-          const a = i / trailPoints.length;
-          ctx.strokeStyle = `rgba(0, 245, 155, ${{a * 0.7}})`;
-          ctx.lineWidth = Math.max(1, a * 4);
+          const alpha = i / trailPoints.length;
+          ctx.strokeStyle = `rgba(0, 242, 254, ${{alpha * 0.7}})`;
+          ctx.lineWidth = Math.max(1, alpha * 5);
           ctx.beginPath();
           ctx.moveTo(trailPoints[i - 1][0], trailPoints[i - 1][1]);
           ctx.lineTo(trailPoints[i][0], trailPoints[i][1]);
@@ -621,79 +706,77 @@ def generate_viewer():
         }}
       }}
 
-      // Manos articuladas
-      const drawHand = (pts, boneCol, jointCol) => {{
-        if (pts.length !== 21) return;
-        const ptsPx = pts.map(p => [p[0] * W, p[1] * H]);
+      // Manos Articuladas
+      [['left_hand', '#ffd166', '#ffe29a'], ['right_hand', '#00f59b', '#70ffcc']].forEach(([handKey, colBone, colJoint]) => {{
+        const pts = frameData[handKey];
+        if (pts && pts.length === 21) {{
+          const pPx = pts.map(p => [p[0] * W, p[1] * H]);
+          HAND_CONNECTIONS.forEach(([i1, i2]) => {{
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(pPx[i1][0], pPx[i1][1]);
+            ctx.lineTo(pPx[i2][0], pPx[i2][1]);
+            ctx.stroke();
 
-        // Huesos
-        ctx.strokeStyle = boneCol;
-        ctx.lineWidth = 2.2;
-        HAND_CONNECTIONS.forEach(([i1, i2]) => {{
-          ctx.beginPath();
-          ctx.moveTo(ptsPx[i1][0], ptsPx[i1][1]);
-          ctx.lineTo(ptsPx[i2][0], ptsPx[i2][1]);
-          ctx.stroke();
-        }});
+            ctx.strokeStyle = colBone;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(pPx[i1][0], pPx[i1][1]);
+            ctx.lineTo(pPx[i2][0], pPx[i2][1]);
+            ctx.stroke();
+          }});
 
-        // Articulaciones
-        ptsPx.forEach((p, idx) => {{
-          const r = [4, 8, 12, 16, 20].includes(idx) ? 5 : 3.2;
-          ctx.fillStyle = jointCol;
-          ctx.beginPath();
-          ctx.arc(p[0], p[1], r, 0, Math.PI * 2);
-          ctx.fill();
-        }});
-      }};
+          pPx.forEach(([x, y], idx) => {{
+            const rad = [4, 8, 12, 16, 20].includes(idx) ? 5 : 3;
+            ctx.fillStyle = colJoint;
+            ctx.beginPath();
+            ctx.arc(x, y, rad, 0, Math.PI * 2);
+            ctx.fill();
+          }});
+        }}
+      }});
 
-      drawHand(frameData.right_hand, '#00f59b', '#69f0ae');
-      drawHand(frameData.left_hand, '#ffea00', '#fff59d');
-
-      // Pulso en Ápex
-      if (annot && annot.apex && frameData.right_hand.length === 21) {{
-        const rw = [frameData.right_hand[0][0] * W, frameData.right_hand[0][1] * H];
-        ctx.strokeStyle = 'rgba(255, 255, 0, 0.8)';
+      // Pulso Ápex
+      if (annot && annot.apex && frameData.right_hand && frameData.right_hand.length === 21) {{
+        const rw = frameData.right_hand[0];
+        ctx.strokeStyle = '#ffea00';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(rw[0], rw[1], 24, 0, Math.PI * 2);
+        ctx.arc(rw[0] * W, rw[1] * H, 22, 0, Math.PI * 2);
         ctx.stroke();
       }}
     }}
 
     function animate(timestamp) {{
-      if (!lastTimestamp) lastTimestamp = timestamp;
-      const delta = (timestamp - lastTimestamp) / 1000;
-      lastTimestamp = timestamp;
+      if (!lastRenderTime) lastRenderTime = timestamp;
+      const elapsed = timestamp - lastRenderTime;
 
-      if (isPlaying && currentSequence.length > 0) {{
-        accumulatedTime += delta * playbackSpeed;
-        const frameInterval = 1 / 24.0;
-        if (accumulatedTime >= frameInterval) {{
+      if (elapsed > (frameInterval / playbackSpeed)) {{
+        lastRenderTime = timestamp;
+
+        if (isPlaying && currentSequence.length > 0) {{
           currentFrameIndex = (currentFrameIndex + 1) % currentSequence.length;
-          accumulatedTime = 0;
           scrubber.value = currentFrameIndex;
         }}
-      }}
 
-      if (currentSequence.length > 0) {{
         const curFrame = currentSequence[currentFrameIndex];
         const curAnnot = currentAnnotations[currentFrameIndex] || {{ sign: '', phase: '', apex: false }};
 
-        drawAvatar(curFrame, curAnnot);
-
-        document.getElementById('hud-sign-name').innerText = 'SEÑA: ' + curAnnot.sign;
-        const phaseElem = document.getElementById('hud-phase');
-        phaseElem.innerText = curAnnot.phase;
-        phaseElem.style.background = curAnnot.apex ? 'rgba(255, 234, 0, 0.25)' : 'rgba(0, 245, 155, 0.2)';
-        phaseElem.style.color = curAnnot.apex ? '#ffea00' : '#00f59b';
-
-        timeDisplay.innerText = `${{String(currentFrameIndex + 1).padStart(2, '0')}} / ${{String(currentSequence.length).padStart(2, '0')}}`;
+        if (curFrame) {{
+          drawAvatar(curFrame, curAnnot);
+          document.getElementById('hud-sign-name').innerText = 'SEÑA: ' + curAnnot.sign;
+          const phaseElem = document.getElementById('hud-phase');
+          phaseElem.innerText = curAnnot.phase;
+          phaseElem.style.background = curAnnot.apex ? 'rgba(255, 234, 0, 0.25)' : 'rgba(0, 245, 155, 0.2)';
+          phaseElem.style.color = curAnnot.apex ? '#ffea00' : '#00f59b';
+          timeDisplay.innerText = `${{String(currentFrameIndex + 1).padStart(2, '0')}} / ${{String(currentSequence.length).padStart(2, '0')}}`;
+        }}
       }}
 
       requestAnimationFrame(animate);
     }}
 
-    // Listeners de controles
     btnPlayPause.addEventListener('click', () => {{
       isPlaying = !isPlaying;
       btnPlayPause.innerText = isPlaying ? 'Pausar' : 'Reanudar';
@@ -713,7 +796,8 @@ def generate_viewer():
       playbackSpeed = parseFloat(e.target.value);
     }});
 
-    // Inicializar con la primera seña (Gracias)
+    initCategories();
+    renderSignList();
     playSingleSign('gracias');
     requestAnimationFrame(animate);
   </script>
