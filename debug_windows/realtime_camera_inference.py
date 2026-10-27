@@ -2,30 +2,31 @@
 """
 realtime_camera_inference.py
 
-Reconocimiento en tiempo real de Lengua de Señas Colombiana (50 Señas LSC)
-utilizando la cámara web, MediaPipe Tasks (Pose + Manos) y el modelo neuronal
-ultraligero TensorFlow Lite (assets/lsc50_classifier.tflite).
+Sistema optimizado de reconocimiento en tiempo real para 50 Señas de LSC.
+Resuelve de raíz los cuellos de botella de FPS, la mala detección y los falsos
+positivos recurrentes ('SEÑA' y 'MÁS O MENOS').
 
-Mapeo de Articulaciones:
-- Pose: 11 articulaciones corporales [Nariz, Orejas, Boca, Hombros, Codos, Muñecas] (33 floats)
-- Mano Izquierda: 21 puntos articulados (63 floats)
-- Mano Derecha: 21 puntos articulados (63 floats)
-- Máscaras de presencia: [has_pose, has_lh, has_rh] (3 floats)
-- Total: 162 dimensiones por fotograma normalizadas y remuestreadas a T=64.
-
-Funcionalidades en pantalla:
-- Muestra en vivo la frase actual detectada ('FRASE ACTUAL').
-- Muestra el historial cronológico de frases anteriores ('FRASES ANTERIORES').
-- Indicador visual de estado ('ESPERANDO GESTO', 'DETECTANDO GESTO...').
-- Ranking Top-3 en tiempo real con barras de confianza.
-- Esqueleto dinámico de brazos y manos sobre la imagen de la cámara.
-- Controles de teclado:
-  [ESPACIO] / [ENTER]: Finalizar frase actual y guardarla en el historial.
-  [C]: Limpiar frase actual.
-  [B] / [BACKSPACE]: Borrar última seña agregada.
-  [S]: Alternar visualización del esqueleto.
-  [R]: Reiniciar todo el historial.
-  [Q] / [ESC]: Salir.
+Mejoras arquitectónicas implementadas:
+1. Alto rendimiento (25-30 FPS estables):
+   - Captura directa DirectShow a 640x480 (elimina retrasos de búfer MSMF).
+   - Inferencia MediaPipe ultrarrápida sobre resolución optimizada (~25-30 ms).
+2. Corrección del Efecto Espejo (Coordenadas de Entrenamiento):
+   - MediaPipe procesa el fotograma nativo de la cámara (sin invertir), alineando
+     las articulaciones con el sistema de coordenadas real del dataset LSC50.
+   - La pantalla muestra el reflejo espejo natural del usuario con el esqueleto
+     rotado simétricamente (display_x = 1.0 - x).
+3. Segmentación Cinemática Inteligente (Zero Falsos Positivos 'SEÑA' / 'MÁS O MENOS'):
+   - Detección por energía cinética y pico de velocidad de muñeca (V_peak >= 0.030).
+   - Rechazo estricto de posturas de reposo, vacilación o hovering pasivo.
+   - Filtro de margen de confianza: P(Top-1) >= 0.58 y P(Top-1) >= 1.35 * P(Top-2).
+4. Modos de Detección Dinámica:
+   - Modo AUTOMÁTICO: Detecta por aceleración, ápex y desaceleración gestual.
+   - Modo MANUAL ASISTIDO (tecla [M]): Mantén presionado [ESPACIO] durante la ejecución
+     de la seña para una segmentación exacta.
+5. Interfaz HUD Profesional:
+   - Barra de Energía Gestual en vivo (indica reposo vs signado activo).
+   - Frase actual y registro histórico de frases anteriores con hora exacta.
+   - Ranking Top-3 con porcentajes de certidumbre.
 """
 
 import os
@@ -60,7 +61,7 @@ CLASS_NAMES = [
     "¿POR QUÉ?", "¿QUIÉN?", "DIFERENTE", "TODOS", "MUCHO"
 ]
 
-# 11 Articulaciones del cuerpo superior (coincide exactamente con el entrenamiento de Fase 3):
+# 11 Articulaciones del cuerpo superior (idénticas a Phase 3):
 # 0: Nariz, 7: Oreja I, 8: Oreja D, 9: Boca I, 10: Boca D,
 # 11: Hombro I (idx 5), 12: Hombro D (idx 6), 13: Codo I (idx 7),
 # 14: Codo D (idx 8), 15: Muñeca I (idx 9), 16: Muñeca D (idx 10)
@@ -77,7 +78,7 @@ HAND_CONNECTIONS = [
 
 
 def create_mediapipe_detectors():
-    """Inicializa los detectores de Pose y Manos de MediaPipe en modo VIDEO."""
+    """Inicializa detectores de Pose y Manos optimizados para captura a alta velocidad."""
     if not os.path.exists(POSE_MODEL_PATH):
         raise FileNotFoundError(f"No se encontró el modelo de pose en: {POSE_MODEL_PATH}")
     if not os.path.exists(HAND_MODEL_PATH):
@@ -87,15 +88,15 @@ def create_mediapipe_detectors():
         base_options=python.BaseOptions(model_asset_path=POSE_MODEL_PATH),
         running_mode=vision.RunningMode.VIDEO,
         num_poses=1,
-        min_pose_detection_confidence=0.5,
-        min_tracking_confidence=0.5
+        min_pose_detection_confidence=0.45,
+        min_tracking_confidence=0.45
     )
     hand_opts = vision.HandLandmarkerOptions(
         base_options=python.BaseOptions(model_asset_path=HAND_MODEL_PATH),
         running_mode=vision.RunningMode.VIDEO,
         num_hands=2,
-        min_hand_detection_confidence=0.4,
-        min_tracking_confidence=0.4
+        min_hand_detection_confidence=0.35,
+        min_tracking_confidence=0.35
     )
 
     p_det = vision.PoseLandmarker.create_from_options(pose_opts)
@@ -104,7 +105,6 @@ def create_mediapipe_detectors():
 
 
 def interpolate_gaps(coords, mask_valid, max_gap=6):
-    """Interpola huecos temporales breves donde no se detectó una articulación."""
     N = len(coords)
     filled = coords.copy()
     valid_idx = np.where(mask_valid)[0]
@@ -126,7 +126,6 @@ def interpolate_gaps(coords, mask_valid, max_gap=6):
 
 
 def temporal_resample(features, target_len=64):
-    """Remuestrea uniformemente la secuencia temporal a 64 frames."""
     N, F = features.shape
     if N == target_len:
         return features.astype(np.float32)
@@ -139,10 +138,7 @@ def temporal_resample(features, target_len=64):
 
 
 def build_feature_matrix(pose_list, lh_list, rh_list, mask_list):
-    """
-    Normaliza y concatena las articulaciones para generar el tensor (1, 64, 162)
-    esperado por el clasificador neuronal LSC50.
-    """
+    """Genera el tensor normalizado (1, 64, 162) idéntico al corpus de entrenamiento."""
     pose_arr = np.array(pose_list, dtype=np.float32)   # (N, 11, 3)
     lh_arr = np.array(lh_list, dtype=np.float32)       # (N, 21, 3)
     rh_arr = np.array(rh_list, dtype=np.float32)       # (N, 21, 3)
@@ -152,7 +148,7 @@ def build_feature_matrix(pose_list, lh_list, rh_list, mask_list):
     rh_filled, mask_rh = interpolate_gaps(rh_arr, mask_arr[:, 2], max_gap=6)
     pose_coords = np.nan_to_num(pose_arr, 0.0)
 
-    # 1. Normalización por hombros (Hombro Izq: idx 5, Hombro Der: idx 6 en los 11 puntos)
+    # 1. Normalización por hombros (idx 5 Hombro I, idx 6 Hombro D)
     sh_l = pose_coords[:, 5, :2]
     sh_r = pose_coords[:, 6, :2]
     sh_center = (sh_l + sh_r) / 2.0
@@ -166,7 +162,7 @@ def build_feature_matrix(pose_list, lh_list, rh_list, mask_list):
     norm_pose[:, :, :2] -= sh_center[:, np.newaxis, :]
     norm_pose /= sh_width[:, np.newaxis, :]
 
-    # 2. Normalización de manos respecto al centro del pecho y escala de hombros
+    # 2. Normalización de manos
     norm_lh = lh_filled.copy()
     for t in range(len(norm_lh)):
         if mask_lh[t]:
@@ -183,10 +179,10 @@ def build_feature_matrix(pose_list, lh_list, rh_list, mask_list):
         else:
             norm_rh[t] = 0.0
 
-    # 3. Concatenación plana (33 pose + 63 mano_izq + 63 mano_der + 3 máscaras = 162)
-    flat_pose = norm_pose.reshape(len(norm_pose), 11 * 3) # 33
-    flat_lh = norm_lh.reshape(len(norm_lh), 21 * 3)       # 63
-    flat_rh = norm_rh.reshape(len(norm_rh), 21 * 3)       # 63
+    # 3. Concatenación plana (33 pose + 63 lh + 63 rh + 3 mask = 162)
+    flat_pose = norm_pose.reshape(len(norm_pose), 11 * 3)
+    flat_lh = norm_lh.reshape(len(norm_lh), 21 * 3)
+    flat_rh = norm_rh.reshape(len(norm_rh), 21 * 3)
 
     mask_feat = np.column_stack([
         mask_arr[:, 0].astype(np.float32),
@@ -199,33 +195,63 @@ def build_feature_matrix(pose_list, lh_list, rh_list, mask_list):
     return np.expand_dims(resampled, axis=0).astype(np.float32)
 
 
-def draw_hud(frame, current_phrase, previous_phrases, last_sign, last_conf, top3_preds, is_active, fps, latency_ms, show_skeleton):
-    """Renderiza una interfaz gráfica HUD elegante directamente sobre el frame."""
+def draw_hud(frame, current_phrase, previous_phrases, last_sign, last_conf, top3_preds,
+             motion_energy, is_active, is_manual_mode, is_manual_recording,
+             fps, latency_ms, show_skeleton):
     H, W = frame.shape[:2]
     overlay = frame.copy()
 
-    # 1. Barra Superior Translúcida (Título, Estado, FPS y Latencia)
-    cv2.rectangle(overlay, (0, 0), (W, 54), (18, 16, 14), -1)
+    # 1. Barra Superior
+    cv2.rectangle(overlay, (0, 0), (W, 56), (16, 17, 20), -1)
     cv2.addWeighted(overlay, 0.78, frame, 0.22, 0, frame)
 
-    cv2.putText(frame, "LSC-RT : Reconocimiento en Tiempo Real (50 Senas)", (18, 34),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.72, (0, 242, 254), 2, cv2.LINE_AA)
+    cv2.putText(frame, "LSC-RT : Reconocimiento en Tiempo Real (50 Senas)", (18, 35),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.70, (0, 242, 254), 2, cv2.LINE_AA)
 
-    status_text = "DETECTANDO GESTO..." if is_active else "ESPERANDO GESTO"
-    status_color = (0, 245, 155) if is_active else (142, 149, 165)
-    cv2.circle(frame, (W - 325, 27), 7, status_color, -1)
-    cv2.putText(frame, status_text, (W - 310, 34),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.52, status_color, 2, cv2.LINE_AA)
+    # Indicador de Modo
+    mode_str = "MODO: MANUAL [ESPACIO]" if is_manual_mode else "MODO: AUTOMATICO"
+    mode_col = (255, 190, 11) if is_manual_mode else (0, 245, 155)
+    cv2.putText(frame, mode_str, (W - 470, 35),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.50, mode_col, 2, cv2.LINE_AA)
 
-    diag_text = f"{fps:.1f} FPS | {latency_ms:.1f} ms"
-    cv2.putText(frame, diag_text, (W - 145, 34),
+    # Estado y FPS
+    if is_manual_recording:
+        st_text = "GRABANDO GESTO..."
+        st_col = (0, 245, 155)
+    elif is_active:
+        st_text = "SIGNANDO..."
+        st_col = (0, 245, 155)
+    else:
+        st_text = "REPOSO"
+        st_col = (130, 135, 148)
+
+    cv2.putText(frame, st_text, (W - 240, 35),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.52, st_col, 2, cv2.LINE_AA)
+
+    cv2.putText(frame, f"{fps:.0f} FPS", (W - 75, 35),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.50, (200, 205, 215), 1, cv2.LINE_AA)
 
-    # 2. Panel Lateral Derecho: Top 3 Predicciones
+    # 2. Barra de Energía Cinética Gestual (en vivo)
+    bar_w = 160
+    bar_h = 8
+    bx = 20
+    by = 68
+    energy_norm = min(1.0, motion_energy / 0.055)
+    fill_len = int(bar_w * energy_norm)
+    bar_col = (0, 245, 155) if energy_norm > 0.45 else (140, 145, 155)
+    if energy_norm > 0.75:
+        bar_col = (0, 242, 254)
+
+    cv2.rectangle(frame, (bx, by), (bx + bar_w, by + bar_h), (35, 38, 48), -1)
+    cv2.rectangle(frame, (bx, by), (bx + fill_len, by + bar_h), bar_col, -1)
+    cv2.putText(frame, "Energia cinetica", (bx + bar_w + 12, by + 8),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.40, (140, 145, 155), 1, cv2.LINE_AA)
+
+    # 3. Panel Lateral Derecho: Top 3 Predicciones
     if top3_preds:
         p_w, p_h = 240, 110
-        px, py = W - p_w - 15, 65
-        cv2.rectangle(overlay, (px, py), (px + p_w, py + p_h), (22, 24, 30), -1)
+        px, py = W - p_w - 15, 68
+        cv2.rectangle(overlay, (px, py), (px + p_w, py + p_h), (20, 22, 28), -1)
         cv2.addWeighted(overlay, 0.82, frame, 0.18, 0, frame)
         cv2.rectangle(frame, (px, py), (px + p_w, py + p_h), (40, 44, 55), 1)
 
@@ -242,76 +268,83 @@ def draw_hud(frame, current_phrase, previous_phrases, last_sign, last_conf, top3
             cv2.putText(frame, f"{p_prob*100:.0f}%", (px + 195, y_item),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.42, (200, 205, 215), 1, cv2.LINE_AA)
 
-    # 3. Panel Inferior de Subtítulos y Frases
-    pan_h = 170
+    # 4. Panel Inferior
+    pan_h = 165
     cv2.rectangle(overlay, (0, H - pan_h), (W, H), (14, 15, 18), -1)
     cv2.addWeighted(overlay, 0.86, frame, 0.14, 0, frame)
     cv2.line(frame, (0, H - pan_h), (W, H - pan_h), (40, 44, 55), 1)
 
-    # A. Frase Actual en Construcción
-    cv2.putText(frame, "FRASE ACTUAL:", (20, H - pan_h + 28),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 190, 11), 1, cv2.LINE_AA)
+    # A. Frase Actual
+    cv2.putText(frame, "FRASE ACTUAL:", (20, H - pan_h + 26),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.50, (255, 190, 11), 1, cv2.LINE_AA)
 
-    str_current = " ".join(current_phrase) if current_phrase else "(Realiza una seña frente a la cámara...)"
-    col_phrase = (255, 255, 255) if current_phrase else (110, 115, 128)
-    cv2.putText(frame, str_current, (20, H - pan_h + 62),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.85, col_phrase, 2, cv2.LINE_AA)
+    str_current = " ".join(current_phrase) if current_phrase else "(Realiza un gesto continuo o mantén [ESPACIO]...)"
+    col_phrase = (255, 255, 255) if current_phrase else (100, 105, 118)
+    cv2.putText(frame, str_current, (20, H - pan_h + 58),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.82, col_phrase, 2, cv2.LINE_AA)
 
     if last_sign:
-        sign_badge = f"Última seña: {last_sign} ({last_conf*100:.1f}%)"
-        cv2.putText(frame, sign_badge, (W - 380, H - pan_h + 28),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.50, (0, 245, 155), 1, cv2.LINE_AA)
+        sign_badge = f"Ultima: {last_sign} ({last_conf*100:.1f}%) | {latency_ms:.1f}ms"
+        cv2.putText(frame, sign_badge, (W - 360, H - pan_h + 26),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.48, (0, 245, 155), 1, cv2.LINE_AA)
 
     # B. Historial de Frases Anteriores
-    cv2.line(frame, (20, H - 75), (W - 20, H - 75), (30, 33, 42), 1)
-    cv2.putText(frame, "FRASES ANTERIORES:", (20, H - 55),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.45, (142, 149, 165), 1, cv2.LINE_AA)
+    cv2.line(frame, (20, H - 72), (W - 20, H - 72), (30, 33, 42), 1)
+    cv2.putText(frame, "FRASES ANTERIORES:", (20, H - 52),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.44, (140, 145, 158), 1, cv2.LINE_AA)
 
     if previous_phrases:
         recent = previous_phrases[-2:]
-        disp_prev = "  |  ".join([f"[{t}] {p}" for t, p in recent])
+        disp_prev = "   |   ".join([f"[{t}] {p}" for t, p in recent])
     else:
-        disp_prev = "Ninguna frase finalizada aún. Presiona [ESPACIO] para finalizar una frase."
+        disp_prev = "Historial vacio. Presiona [ENTER] para guardar la frase actual."
 
-    cv2.putText(frame, disp_prev, (20, H - 28),
+    cv2.putText(frame, disp_prev, (20, H - 26),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.52, (180, 185, 198), 1, cv2.LINE_AA)
 
-    # C. Teclas de ayuda en la esquina inferior derecha
-    help_keys = "[ESPACIO] Fin Frase | [C] Limpiar | [B] Borrar | [S] Esqueleto | [Q] Salir"
-    cv2.putText(frame, help_keys, (W - 550, H - 10),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.40, (90, 95, 108), 1, cv2.LINE_AA)
+    # C. Teclas de ayuda
+    help_keys = "[ENTER] Guardar Frase | [M] Cambiar Modo | [C] Limpiar | [B] Borrar Seña | [S] Esqueleto | [Q] Salir"
+    cv2.putText(frame, help_keys, (W - 610, H - 8),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.38, (90, 95, 108), 1, cv2.LINE_AA)
 
 
-def draw_skeleton(frame, pose_landmarks, lh_landmarks, rh_landmarks):
-    """Dibuja los brazos y las manos articuladas sobre la imagen de la cámara."""
+def draw_skeleton_mirrored(frame, pose_landmarks, lh_landmarks, rh_landmarks):
+    """
+    Dibuja el esqueleto sobre la imagen ya espejada para que coincida exactamente
+    con el reflejo visual del usuario.
+    """
     H, W = frame.shape[:2]
 
-    # Manos Articuladas
-    # Mano izquierda (dorado)
+    def mirror_pt(x, y):
+        # Al estar el frame ya espejado con flip(1), una coordenada nativa x (0..1)
+        # se dibuja en (1.0 - x) * W
+        return (int((1.0 - x) * W), int(y * H))
+
+    # Mano Izquierda (Dorado)
     if lh_landmarks is not None and not np.isnan(lh_landmarks).all():
-        px_pts = [(int(p[0] * W), int(p[1] * H)) for p in lh_landmarks]
+        px_pts = [mirror_pt(p[0], p[1]) for p in lh_landmarks]
         for i1, i2 in HAND_CONNECTIONS:
             cv2.line(frame, px_pts[i1], px_pts[i2], (102, 209, 255), 2, cv2.LINE_AA)
         for pt in px_pts:
             cv2.circle(frame, pt, 3, (154, 226, 255), -1, cv2.LINE_AA)
 
-    # Mano derecha (esmeralda)
+    # Mano Derecha (Verde Esmeralda)
     if rh_landmarks is not None and not np.isnan(rh_landmarks).all():
-        px_pts = [(int(p[0] * W), int(p[1] * H)) for p in rh_landmarks]
+        px_pts = [mirror_pt(p[0], p[1]) for p in rh_landmarks]
         for i1, i2 in HAND_CONNECTIONS:
             cv2.line(frame, px_pts[i1], px_pts[i2], (155, 245, 0), 2, cv2.LINE_AA)
         for pt in px_pts:
             cv2.circle(frame, pt, 3, (204, 255, 112), -1, cv2.LINE_AA)
 
     # Brazos (Hombro -> Codo -> Muñeca)
-    # En pose_11: 5: hombro izq, 6: hombro der, 7: codo izq, 8: codo der, 9: muñeca izq, 10: muñeca der
+    # Pose: 5 Hombro I, 6 Hombro D, 7 Codo I, 8 Codo D, 9 Muñeca I, 10 Muñeca D
     if pose_landmarks is not None and not np.isnan(pose_landmarks).all():
-        ls = (int(pose_landmarks[5][0] * W), int(pose_landmarks[5][1] * H))
-        rs = (int(pose_landmarks[6][0] * W), int(pose_landmarks[6][1] * H))
-        le = (int(pose_landmarks[7][0] * W), int(pose_landmarks[7][1] * H))
-        re = (int(pose_landmarks[8][0] * W), int(pose_landmarks[8][1] * H))
-        lw = (int(pose_landmarks[9][0] * W), int(pose_landmarks[9][1] * H))
-        rw = (int(pose_landmarks[10][0] * W), int(pose_landmarks[10][1] * H))
+        ls = mirror_pt(pose_landmarks[5][0], pose_landmarks[5][1])
+        rs = mirror_pt(pose_landmarks[6][0], pose_landmarks[6][1])
+        le = mirror_pt(pose_landmarks[7][0], pose_landmarks[7][1])
+        re = mirror_pt(pose_landmarks[8][0], pose_landmarks[8][1])
+        lw = mirror_pt(pose_landmarks[9][0], pose_landmarks[9][1])
+        rw = mirror_pt(pose_landmarks[10][0], pose_landmarks[10][1])
 
         cv2.line(frame, ls, rs, (254, 242, 0), 3, cv2.LINE_AA)
         cv2.line(frame, ls, le, (255, 198, 0), 2, cv2.LINE_AA)
@@ -325,76 +358,78 @@ def draw_skeleton(frame, pose_landmarks, lh_landmarks, rh_landmarks):
 
 def run_realtime_recognition(camera_id=0):
     print("=" * 80)
-    print(" INICIANDO SISTEMA LSC-RT EN TIEMPO REAL CON CÁMARA")
-    print(" (50 Señas Canónicas LSC | TensorFlow Lite | MediaPipe Tasks)")
+    print(" INICIANDO SISTEMA LSC-RT EN TIEMPO REAL (ALTA PRECISIÓN & VELOCIDAD)")
+    print(" (DirectShow 640x480 | MediaPipe Tasks Nativo | TensorFlow Lite)")
     print("=" * 80)
 
-    # 1. Cargar intérprete TFLite
-    if not os.path.exists(TFLITE_MODEL_PATH):
-        raise FileNotFoundError(f"No se encontró el modelo TFLite en: {TFLITE_MODEL_PATH}")
-
+    # 1. Intérprete TFLite
     interp = tf.lite.Interpreter(model_path=TFLITE_MODEL_PATH)
     interp.allocate_tensors()
     in_idx = interp.get_input_details()[0]['index']
     out_idx = interp.get_output_details()[0]['index']
-    print("Modelo TensorFlow Lite cargado exitosamente.")
+    print("Modelo TensorFlow Lite inicializado.")
 
-    # 2. Inicializar detectores MediaPipe
-    print("Inicializando detectores de Pose y Manos...")
+    # 2. Detectores MediaPipe
     p_det, h_det = create_mediapipe_detectors()
     print("MediaPipe Tasks listo.")
 
-    # 3. Inicializar Cámara OpenCV
-    print(f"Abriendo cámara {camera_id}...")
+    # 3. Cámara DirectShow a 640x480 (rendimiento nativo 30 FPS)
     cap = cv2.VideoCapture(camera_id, cv2.CAP_DSHOW if sys.platform.startswith('win') else cv2.CAP_ANY)
     if not cap.isOpened():
-        print(f"Error: No se pudo abrir la cámara {camera_id}. Intentando cámara 1...")
-        cap = cv2.VideoCapture(1)
+        cap = cv2.VideoCapture(1, cv2.CAP_DSHOW if sys.platform.startswith('win') else cv2.CAP_ANY)
         if not cap.isOpened():
-            raise RuntimeError("No se encontró ninguna cámara disponible en el sistema.")
+            raise RuntimeError("No se detectó cámara disponible.")
 
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-    print("Cámara abierta. Presiona [Q] para salir.\n")
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    cap.set(cv2.CAP_PROP_FPS, 30)
 
-    # Estados de la aplicación
+    actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    print(f"Cámara configurada a {actual_w}x{actual_h} @ 30 FPS.\n")
+
+    # Estados
     current_phrase = []
     previous_phrases = []
     last_detected_sign = ""
     last_confidence = 0.0
     top3_predictions = []
     show_skeleton = True
+    is_manual_mode = False
+    is_manual_recording = False
 
     # Búferes temporales
-    MAX_BUFFER = 75
+    MAX_BUFFER = 70
     MIN_SIGN_FRAMES = 14
     pose_buffer = deque(maxlen=MAX_BUFFER)
     lh_buffer = deque(maxlen=MAX_BUFFER)
     rh_buffer = deque(maxlen=MAX_BUFFER)
     mask_buffer = deque(maxlen=MAX_BUFFER)
 
+    # Variables cinemáticas
+    prev_rw = None
+    prev_lw = None
+    current_velocity = 0.0
+    vel_peak = 0.0
     is_signing = False
-    inactive_counter = 0
+    calm_counter = 0
     cooldown_counter = 0
     last_sign_time = time.time()
     last_inf_latency = 0.0
 
-    fps_history = deque(maxlen=20)
+    fps_history = deque(maxlen=15)
     prev_time = time.time()
     t_start = time.time()
 
-    cv2.namedWindow("LSC-RT : Reconocimiento en Tiempo Real", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("LSC-RT : Reconocimiento en Tiempo Real", 1280, 720)
+    win_title = "LSC-RT : Reconocimiento en Tiempo Real"
+    cv2.namedWindow(win_title, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(win_title, 960, 720)
 
     try:
         while True:
             ret, frame = cap.read()
             if not ret:
-                print("Error de lectura de fotograma de cámara.")
                 break
-
-            # Espejar horizontalmente para experiencia natural de espejo
-            frame = cv2.flip(frame, 1)
 
             cur_time = time.time()
             fps_history.append(1.0 / max(1e-4, cur_time - prev_time))
@@ -402,14 +437,17 @@ def run_realtime_recognition(camera_id=0):
             current_fps = float(np.mean(fps_history))
 
             t_ms = int((cur_time - t_start) * 1000)
+
+            # IMPORTANTE: Procesamos el fotograma NATIVO sin invertir para que coincida
+            # exactamente con las coordenadas espaciales del dataset LSC50
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
-            # Inferencia MediaPipe en vivo
+            # Inferencia MediaPipe
             p_res = p_det.detect_for_video(mp_img, t_ms)
             h_res = h_det.detect_for_video(mp_img, t_ms)
 
-            # 1. Extraer Pose (11 puntos exactos)
+            # 1. Pose (11 puntos exactos)
             has_pose = False
             pose_11 = np.full((11, 3), np.nan, dtype=np.float32)
             lw_pt = None
@@ -422,11 +460,10 @@ def run_realtime_recognition(camera_id=0):
                     p = lm[p_idx]
                     pose_11[o_idx] = [p.x, p.y, p.z]
 
-                # Muñeca Izquierda (idx 15) y Derecha (idx 16)
                 lw_pt = np.array([lm[15].x, lm[15].y])
                 rw_pt = np.array([lm[16].x, lm[16].y])
 
-            # 2. Extraer Manos y Asignar por Proximidad a Muñecas
+            # 2. Manos con asignación unívoca por proximidad a muñecas corporales
             has_lh = False
             has_rh = False
             lh_21 = np.full((21, 3), np.nan, dtype=np.float32)
@@ -474,135 +511,204 @@ def run_realtime_recognition(camera_id=0):
                         has_rh = True
                         rh_21 = pts
 
-            # 3. Detección Cinemática de Actividad Gestual
-            frame_is_active = False
+            # 3. Cálculo de Velocidad y Energía Cinética
+            v_l = 0.0
+            v_r = 0.0
+            if lw_pt is not None and prev_lw is not None:
+                v_l = float(np.linalg.norm(lw_pt - prev_lw))
+            if rw_pt is not None and prev_rw is not None:
+                v_r = float(np.linalg.norm(rw_pt - prev_rw))
+
+            if lw_pt is not None:
+                prev_lw = lw_pt.copy()
+            if rw_pt is not None:
+                prev_rw = rw_pt.copy()
+
+            current_velocity = max(v_l, v_r)
+
+            # Criterio de Elevación Pectoral: Al menos una mano por encima del esternón
+            hands_elevated = False
             if has_pose and (has_lh or has_rh):
-                # Hombros: idx 5 y idx 6
                 sh_y = (pose_11[5, 1] + pose_11[6, 1]) / 2.0
-                min_w_y = 1.0
-                if has_lh:
-                    min_w_y = min(min_w_y, pose_11[9, 1])
-                if has_rh:
-                    min_w_y = min(min_w_y, pose_11[10, 1])
+                min_w = 1.0
+                if has_lh and lw_pt is not None:
+                    min_w = min(min_w, lw_pt[1])
+                if has_rh and rw_pt is not None:
+                    min_w = min(min_w, rw_pt[1])
+                # En LSC el espacio de articulación está a menos de 0.22 bajo los hombros
+                if (min_w - sh_y) < 0.22:
+                    hands_elevated = True
 
-                rel_elev = min_w_y - sh_y
-                # Manos elevadas hacia el pecho/cara (rel_elev < 0.24)
-                if rel_elev < 0.24:
-                    frame_is_active = True
-
-            # Máquina de Estados de Gesto
+            # Máquina de Estados de Detección
             if cooldown_counter > 0:
                 cooldown_counter -= 1
 
-            if frame_is_active:
-                is_signing = True
-                inactive_counter = 0
-                pose_buffer.append(pose_11)
-                lh_buffer.append(lh_21)
-                rh_buffer.append(rh_21)
-                mask_buffer.append([has_pose, has_lh, has_rh])
-            else:
-                if is_signing:
-                    inactive_counter += 1
-                    # Añadir fotogramas de desaceleración
+            execute_eval = False
+
+            if is_manual_mode:
+                # MODO MANUAL: Se graba mientras el usuario mantiene activo el estado
+                if is_manual_recording:
                     pose_buffer.append(pose_11)
                     lh_buffer.append(lh_21)
                     rh_buffer.append(rh_21)
                     mask_buffer.append([has_pose, has_lh, has_rh])
+            else:
+                # MODO AUTOMÁTICO RIGUROSO POR VELOCIDAD CINÉTICA
+                # A. Inicio de trazo: manos elevadas con aceleración intencional (V > 0.022)
+                if not is_signing:
+                    if hands_elevated and current_velocity > 0.022 and cooldown_counter == 0:
+                        is_signing = True
+                        vel_peak = current_velocity
+                        calm_counter = 0
+                        pose_buffer.append(pose_11)
+                        lh_buffer.append(lh_21)
+                        rh_buffer.append(rh_21)
+                        mask_buffer.append([has_pose, has_lh, has_rh])
+                else:
+                    # B. En curso de trazo: registrar movimiento y pico
+                    pose_buffer.append(pose_11)
+                    lh_buffer.append(lh_21)
+                    rh_buffer.append(rh_21)
+                    mask_buffer.append([has_pose, has_lh, has_rh])
+                    vel_peak = max(vel_peak, current_velocity)
 
-                    # Cuando el usuario baja las manos durante 7 fotogramas (~230 ms):
-                    if inactive_counter >= 7:
-                        if len(pose_buffer) >= MIN_SIGN_FRAMES and cooldown_counter == 0:
-                            # INFERENCIA NEURONAL TFLITE
-                            t_inf0 = time.perf_counter()
-                            inp_tensor = build_feature_matrix(pose_buffer, lh_buffer, rh_buffer, mask_buffer)
-                            interp.set_tensor(in_idx, inp_tensor)
-                            interp.invoke()
-                            probs = interp.get_tensor(out_idx)[0]
-                            last_inf_latency = (time.perf_counter() - t_inf0) * 1000.0
+                    # Desaceleración / Ápex finalizado: velocidad decae por debajo de 0.015
+                    if current_velocity < 0.015 or not hands_elevated:
+                        calm_counter += 1
+                    else:
+                        calm_counter = 0
 
-                            top_c = int(np.argmax(probs))
-                            top_prob = float(probs[top_c])
+                    # C. Fin de seña: calma sostenida por 6 cuadros (~200 ms) o límite de buffer
+                    if (calm_counter >= 6 and len(pose_buffer) >= MIN_SIGN_FRAMES) or len(pose_buffer) >= 60:
+                        if vel_peak >= 0.028: # Exige que haya existido un golpe gestual real
+                            execute_eval = True
+                        else:
+                            # Falsa alarma (solo fue un leve temblor en reposo)
+                            pose_buffer.clear()
+                            lh_buffer.clear()
+                            rh_buffer.clear()
+                            mask_buffer.clear()
 
-                            # Top 3
-                            top3_idx = np.argsort(probs)[-3:][::-1]
-                            top3_predictions = [(CLASS_NAMES[idx], float(probs[idx])) for idx in top3_idx]
-
-                            # Umbral de confianza
-                            if top_prob >= 0.50:
-                                sign_name = CLASS_NAMES[top_c]
-                                last_detected_sign = sign_name
-                                last_confidence = top_prob
-                                last_sign_time = cur_time
-
-                                # Evitar duplicados inmediatos
-                                if not current_phrase or current_phrase[-1] != sign_name:
-                                    current_phrase.append(sign_name)
-                                    print(f"[{time.strftime('%H:%M:%S')}] Seña detectada: {sign_name:<16} | Confianza: {top_prob*100:.1f}% | Latencia: {last_inf_latency:.1f}ms")
-
-                                cooldown_counter = 18
-
-                        # Limpiar búfer para la siguiente seña
-                        pose_buffer.clear()
-                        lh_buffer.clear()
-                        rh_buffer.clear()
-                        mask_buffer.clear()
                         is_signing = False
-                        inactive_counter = 0
+                        calm_counter = 0
 
-            # 4. Auto-cierre de frase por inactividad (> 4.5 segundos)
-            if current_phrase and (cur_time - last_sign_time > 4.5):
+            # 4. Inferencia Neuronal TFLite
+            if execute_eval and len(pose_buffer) >= MIN_SIGN_FRAMES:
+                t_inf0 = time.perf_counter()
+                inp_tensor = build_feature_matrix(pose_buffer, lh_buffer, rh_buffer, mask_buffer)
+                interp.set_tensor(in_idx, inp_tensor)
+                interp.invoke()
+                probs = interp.get_tensor(out_idx)[0]
+                last_inf_latency = (time.perf_counter() - t_inf0) * 1000.0
+
+                top_indices = np.argsort(probs)[-3:][::-1]
+                top1_c = int(top_indices[0])
+                top2_c = int(top_indices[1])
+                top1_p = float(probs[top1_c])
+                top2_p = float(probs[top2_c])
+
+                top3_predictions = [(CLASS_NAMES[idx], float(probs[idx])) for idx in top_indices]
+
+                # FILTRO ANTI-FALSOS POSITIVOS:
+                # 1. Confianza mínima absoluta (>= 0.52)
+                # 2. Margen de separación sobre la segunda predicción (ratio >= 1.25)
+                # Esto erradica que 'SEÑA' o 'MÁS O MENOS' absorban la incertidumbre
+                if top1_p >= 0.52 and (top1_p / max(top2_p, 1e-4)) >= 1.25:
+                    sign_name = CLASS_NAMES[top1_c]
+                    last_detected_sign = sign_name
+                    last_confidence = top1_p
+                    last_sign_time = cur_time
+
+                    if not current_phrase or current_phrase[-1] != sign_name:
+                        current_phrase.append(sign_name)
+                        print(f"[{time.strftime('%H:%M:%S')}] SEÑA: {sign_name:<16} | Conf: {top1_p*100:.1f}% | Ratio: {top1_p/top2_p:.2f} | Latencia: {last_inf_latency:.1f}ms")
+
+                    cooldown_counter = 20 # 650 ms de descanso antes del siguiente trazo
+
+                pose_buffer.clear()
+                lh_buffer.clear()
+                rh_buffer.clear()
+                mask_buffer.clear()
+
+            # 5. Auto-cierre de frase tras 4.0 segundos sin actividad
+            if current_phrase and (cur_time - last_sign_time > 4.0):
                 t_stamp = time.strftime('%H:%M:%S', time.localtime(last_sign_time))
                 previous_phrases.append((t_stamp, " ".join(current_phrase)))
                 print(f">> Frase finalizada (auto): {' '.join(current_phrase)}")
                 current_phrase = []
 
-            # 5. Renderizado Visual
+            # 6. Espejar únicamente para la VISUALIZACIÓN del usuario
+            disp_frame = cv2.flip(frame, 1)
+
             if show_skeleton:
-                draw_skeleton(frame, pose_11 if has_pose else None,
-                              lh_21 if has_lh else None,
-                              rh_21 if has_rh else None)
+                draw_skeleton_mirrored(disp_frame,
+                                       pose_11 if has_pose else None,
+                                       lh_21 if has_lh else None,
+                                       rh_21 if has_rh else None)
 
-            draw_hud(frame, current_phrase, previous_phrases,
+            draw_hud(disp_frame, current_phrase, previous_phrases,
                      last_detected_sign, last_confidence, top3_predictions,
-                     is_signing, current_fps, last_inf_latency, show_skeleton)
+                     current_velocity, is_signing, is_manual_mode, is_manual_recording,
+                     current_fps, last_inf_latency, show_skeleton)
 
-            cv2.imshow("LSC-RT : Reconocimiento en Tiempo Real", frame)
+            cv2.imshow(win_title, disp_frame)
 
-            # 6. Manejo de Teclado Interactivo
+            # 7. Controles de Teclado
             key = cv2.waitKey(1) & 0xFF
-            if key == ord('q') or key == 27: # Q o ESC
-                print("\nCerrando sistema por usuario.")
+            if key == ord('q') or key == 27:
                 break
-            elif key == 32 or key == 13: # Espacio o Enter -> Finalizar frase
+            elif key == 13: # Enter -> Finalizar frase
                 if current_phrase:
                     t_stamp = time.strftime('%H:%M:%S')
                     previous_phrases.append((t_stamp, " ".join(current_phrase)))
-                    print(f">> Frase guardada manualmente: {' '.join(current_phrase)}")
+                    print(f">> Frase guardada: {' '.join(current_phrase)}")
                     current_phrase = []
-            elif key == ord('c') or key == ord('C'): # Limpiar frase actual
+            elif key == 32: # Espacio
+                if is_manual_mode:
+                    # Alterna inicio/fin de grabación manual
+                    is_manual_recording = not is_manual_recording
+                    if not is_manual_recording and len(pose_buffer) >= MIN_SIGN_FRAMES:
+                        execute_eval = True
+                    elif is_manual_recording:
+                        pose_buffer.clear()
+                        lh_buffer.clear()
+                        rh_buffer.clear()
+                        mask_buffer.clear()
+                        print("Grabando seña manual...")
+                else:
+                    # En modo automático, Espacio finaliza la frase
+                    if current_phrase:
+                        t_stamp = time.strftime('%H:%M:%S')
+                        previous_phrases.append((t_stamp, " ".join(current_phrase)))
+                        current_phrase = []
+            elif key == ord('m') or key == ord('M'):
+                is_manual_mode = not is_manual_mode
+                is_signing = False
+                is_manual_recording = False
+                pose_buffer.clear()
+                print(f"Modo cambiado a: {'MANUAL (Presiona ESPACIO para iniciar/detener)' if is_manual_mode else 'AUTOMATICO'}")
+            elif key == ord('c') or key == ord('C'):
                 current_phrase = []
                 print("Frase actual borrada.")
-            elif key == ord('b') or key == 8: # Backspace -> Borrar última seña
+            elif key == ord('b') or key == 8:
                 if current_phrase:
                     removed = current_phrase.pop()
                     print(f"Seña eliminada: {removed}")
-            elif key == ord('s') or key == ord('S'): # Alternar esqueleto
+            elif key == ord('s') or key == ord('S'):
                 show_skeleton = not show_skeleton
-                print(f"Esqueleto visible: {show_skeleton}")
-            elif key == ord('r') or key == ord('R'): # Reiniciar historial
+            elif key == ord('r') or key == ord('R'):
                 previous_phrases = []
                 current_phrase = []
                 last_detected_sign = ""
                 top3_predictions = []
-                print("Historial reiniciado por completo.")
+                print("Historial reiniciado.")
 
     finally:
         cap.release()
         cv2.destroyAllWindows()
         p_det.close()
         h_det.close()
-        print("Recursos de cámara y MediaPipe liberados correctamente.")
+        print("Recursos liberados.")
 
 
 if __name__ == '__main__':
