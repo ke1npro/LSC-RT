@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
+import 'avatar/avatar_screen.dart';
 import 'settings/settings_screen.dart';
 import 'teaching/teaching_screen.dart';
 import 'translation/translation_screen.dart';
@@ -17,6 +18,7 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   final List<Widget> _screens = const [
     TranslationScreen(),
+    AvatarScreen(),
     TeachingScreen(),
     SettingsScreen(),
   ];
@@ -54,18 +56,27 @@ class _MainScaffoldState extends State<MainScaffold> {
               items: const [
                 BottomNavigationBarItem(
                   icon: Icon(Icons.translate_rounded),
-                  activeIcon: Icon(Icons.translate_rounded, color: AppColors.cyanAccent),
+                  activeIcon:
+                      Icon(Icons.translate_rounded, color: AppColors.cyanAccent),
                   label: 'Traducción',
                 ),
                 BottomNavigationBarItem(
+                  icon: Icon(Icons.accessibility_new_rounded),
+                  activeIcon: Icon(Icons.accessibility_new_rounded,
+                      color: AppColors.cyanAccent),
+                  label: 'Avatar',
+                ),
+                BottomNavigationBarItem(
                   icon: Icon(Icons.school_outlined),
-                  activeIcon: Icon(Icons.school_rounded, color: AppColors.cyanAccent),
+                  activeIcon:
+                      Icon(Icons.school_rounded, color: AppColors.cyanAccent),
                   label: 'Enseñanza',
                 ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.settings_outlined),
-                  activeIcon: Icon(Icons.settings_rounded, color: AppColors.cyanAccent),
-                  label: 'Ajustes',
+                  activeIcon:
+                      Icon(Icons.settings_rounded, color: AppColors.cyanAccent),
+                  label: 'Configuración',
                 ),
               ],
             ),

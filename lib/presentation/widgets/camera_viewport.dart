@@ -81,7 +81,7 @@ class CameraViewport extends StatelessWidget {
               ),
 
               // 2. Capa de overlay declarativo (esqueleto, visor facial o guía)
-              if (overlay != null) overlay!,
+              ?overlay,
             ],
           ),
         );

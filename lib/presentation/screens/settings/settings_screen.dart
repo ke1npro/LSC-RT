@@ -75,7 +75,229 @@ class SettingsScreen extends StatelessWidget {
 
                 const SizedBox(height: 28),
 
-                // SECCIÓN 2: HOJA DE RUTA / FUTURAS MEJORAS
+                // SECCIÓN 2: GESTIÓN DE DATASET Y RESTAURACIÓN DE FÁBRICA
+                _buildSectionHeader('GESTIÓN DE DATASET Y OVERRIDES'),
+                const SizedBox(height: 10),
+                _buildCard([
+                  ListTile(
+                    leading: const Icon(Icons.inventory_2_outlined,
+                        color: AppColors.cyanAccent, size: 22),
+                    title: const Text(
+                      'Dataset Original de Fábrica',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${settingsVm.factorySignsCount} señas canónicas base cargadas de assets.',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.mintGreen.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'Activo',
+                        style: TextStyle(
+                          color: AppColors.mintGreen,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1, color: AppColors.glassBorder),
+                  ListTile(
+                    leading: Icon(
+                      Icons.tune_outlined,
+                      color: settingsVm.hasCustomOverrides
+                          ? AppColors.amberWarning
+                          : AppColors.textMuted,
+                      size: 22,
+                    ),
+                    title: const Text(
+                      'Overrides Personalizados de Usuario',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      settingsVm.hasCustomOverrides
+                          ? '${settingsVm.customOverridesCount} señas personalizadas en almacenamiento local.'
+                          : 'Sin modificaciones locales (usando valores de fábrica).',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1, color: AppColors.glassBorder),
+                  Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.restore_rounded, size: 20),
+                        label: const Text(
+                          'Restablecer a valores de fábrica',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.redError,
+                          side: const BorderSide(color: AppColors.redError),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              backgroundColor: AppColors.surface,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                side: const BorderSide(
+                                    color: AppColors.glassBorder),
+                              ),
+                              title: const Text(
+                                '¿Restablecer Dataset?',
+                                style: TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              content: const Text(
+                                'Se eliminarán todos los overrides y calibraciones locales, restaurando la base de datos de señas canónica de fábrica.',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(ctx).pop(false),
+                                  child: const Text('Cancelar',
+                                      style: TextStyle(
+                                          color: AppColors.textSecondary)),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () => Navigator.of(ctx).pop(true),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.redError,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  child: const Text('Restablecer'),
+                                ),
+                              ],
+                            ),
+                          );
+
+                          if (confirm == true) {
+                            await settingsVm.restoreFactoryDataset();
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Base de datos restaurada a valores canónicos de fábrica.',
+                                  ),
+                                  duration: Duration(seconds: 3),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ]),
+
+                const SizedBox(height: 28),
+
+                // SECCIÓN 3: CALIBRACIÓN DE PALABRAS (PLACEHOLDER NO FUNCIONAL)
+                _buildSectionHeader(
+                    'CALIBRACIÓN DE PALABRAS (EN ESPERA DE CONFIRMACIÓN)'),
+                const SizedBox(height: 10),
+                _buildCard([
+                  ListTile(
+                    enabled: false,
+                    leading: const Icon(Icons.app_registration_rounded,
+                        color: AppColors.textMuted, size: 22),
+                    title: const Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Recalibrar Vocabulario Dinámico',
+                            style: TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        _PlaceholderBadge(),
+                      ],
+                    ),
+                    subtitle: const Text(
+                      'Permitirá reescribir las secuencias de referencia directamente desde la cámara.',
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: const Icon(Icons.lock_outline_rounded,
+                        color: AppColors.textMuted, size: 18),
+                  ),
+                  const Divider(height: 1, color: AppColors.glassBorder),
+                  ListTile(
+                    enabled: false,
+                    leading: const Icon(Icons.straighten_rounded,
+                        color: AppColors.textMuted, size: 22),
+                    title: const Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Tolerancia Euclidiana y Filtro DTW',
+                            style: TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        _PlaceholderBadge(),
+                      ],
+                    ),
+                    subtitle: const Text(
+                      'Ajuste manual del umbral de rechazo para señas de baja confianza.',
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: const Icon(Icons.lock_outline_rounded,
+                        color: AppColors.textMuted, size: 18),
+                  ),
+                ]),
+
+                const SizedBox(height: 28),
+
+                // SECCIÓN 4: HOJA DE RUTA
                 _buildSectionHeader('PRÓXIMAS FUNCIONALIDADES (HOJA DE RUTA)'),
                 const SizedBox(height: 10),
                 _buildCard([
@@ -87,30 +309,16 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   const Divider(height: 1, color: AppColors.glassBorder),
                   _buildDisabledTile(
-                    icon: Icons.accessibility_new_outlined,
-                    title: 'Avatar 3D Completo (Texto ➔ Señas)',
-                    subtitle:
-                        'Modelo tridimensional de traducción bidireccional.',
-                  ),
-                  const Divider(height: 1, color: AppColors.glassBorder),
-                  _buildDisabledTile(
                     icon: Icons.timeline_outlined,
                     title: 'Reconocimiento Continuo de Frases (LSTM)',
                     subtitle:
                         'Ventana temporal deslizante para oraciones en movimiento.',
                   ),
-                  const Divider(height: 1, color: AppColors.glassBorder),
-                  _buildDisabledTile(
-                    icon: Icons.vibration_outlined,
-                    title: 'Feedback Háptico en Corrección',
-                    subtitle:
-                        'Vibración háptica ante desvíos posturales del usuario.',
-                  ),
                 ]),
 
                 const SizedBox(height: 28),
 
-                // SECCIÓN 3: INFORMACIÓN DEL SISTEMA
+                // SECCIÓN 5: INFORMACIÓN DEL SISTEMA
                 _buildSectionHeader('INFORMACIÓN DEL SISTEMA'),
                 const SizedBox(height: 10),
                 _buildCard([
@@ -129,7 +337,7 @@ class SettingsScreen extends StatelessWidget {
                         ),
                         SizedBox(height: 4),
                         Text(
-                          'Versión 2.0.0 (Clean Architecture + Two-Bone IK)\nMotor de Visión: MediaPipe Hand Landmarker + MLKit Face\nClasificación: Distancia Euclidiana en Espacio Normalizado',
+                          'Versión 2.1.0 (Clean Architecture + Avatar Cinemático)\nMotor de Visión: MediaPipe Hand Landmarker + MLKit Face\nSíntesis: Hermite Cubic Blending (60 FPS)\nClasificación: Distancia Euclidiana en Espacio Normalizado',
                           style: TextStyle(
                             color: AppColors.textSecondary,
                             fontSize: 12,
@@ -252,21 +460,6 @@ class SettingsScreen extends StatelessWidget {
           ),
         ),
       ),
-      trailing: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: const Text(
-          'Pronto',
-          style: TextStyle(
-            color: AppColors.textMuted,
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
     );
   }
 
@@ -279,86 +472,69 @@ class SettingsScreen extends StatelessWidget {
     required int currentValue,
     required ValueChanged<int> onChanged,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(icon, color: iconColor, size: 22),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                    height: 1.3,
-                  ),
-                ),
-              ],
-            ),
+    return ListTile(
+      leading: Icon(icon, color: iconColor, size: 22),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 12,
+          height: 1.3,
+        ),
+      ),
+      trailing: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          value: currentValue,
+          dropdownColor: AppColors.surface,
+          style: const TextStyle(
+            color: AppColors.cyanAccent,
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
           ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.glassBorder),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<int>(
-                value: currentValue,
-                isDense: true,
-                dropdownColor: AppColors.surface,
-                style: const TextStyle(
-                  color: AppColors.cyanAccent,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                ),
-                icon: const Icon(
-                  Icons.arrow_drop_down,
-                  color: AppColors.cyanAccent,
-                  size: 20,
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 270,
-                    child: Text('270° (Defecto)'),
-                  ),
-                  DropdownMenuItem(
-                    value: 90,
-                    child: Text('90° CW'),
-                  ),
-                  DropdownMenuItem(
-                    value: 0,
-                    child: Text('0° (Off)'),
-                  ),
-                  DropdownMenuItem(
-                    value: 180,
-                    child: Text('180°'),
-                  ),
-                ],
-                onChanged: (val) {
-                  if (val != null) onChanged(val);
-                },
-              ),
-            ),
-          ),
-        ],
+          items: const [
+            DropdownMenuItem(value: 0, child: Text('0°')),
+            DropdownMenuItem(value: 90, child: Text('90°')),
+            DropdownMenuItem(value: 180, child: Text('180°')),
+            DropdownMenuItem(value: 270, child: Text('270°')),
+          ],
+          onChanged: (val) {
+            if (val != null) onChanged(val);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _PlaceholderBadge extends StatelessWidget {
+  const _PlaceholderBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.amberWarning.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: AppColors.amberWarning.withValues(alpha: 0.4),
+        ),
+      ),
+      child: const Text(
+        'Próximamente',
+        style: TextStyle(
+          color: AppColors.amberWarning,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }

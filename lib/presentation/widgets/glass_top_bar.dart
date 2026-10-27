@@ -7,6 +7,7 @@ class GlassTopBar extends StatelessWidget {
   final String? subtitle;
   final bool isOnline;
   final VoidCallback? onSwitchCamera;
+  final Widget? leadingAction;
   final List<Widget>? actions;
 
   const GlassTopBar({
@@ -15,6 +16,7 @@ class GlassTopBar extends StatelessWidget {
     this.subtitle,
     this.isOnline = true,
     this.onSwitchCamera,
+    this.leadingAction,
     this.actions,
   });
 
@@ -37,24 +39,29 @@ class GlassTopBar extends StatelessWidget {
             ),
             child: Row(
               children: [
-                // Indicador de estado (pulso verde/cyan)
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isOnline ? AppColors.mintGreen : AppColors.amberWarning,
-                    boxShadow: [
-                      BoxShadow(
-                        color: (isOnline ? AppColors.mintGreen : AppColors.amberWarning)
-                            .withValues(alpha: 0.6),
-                        blurRadius: 6,
-                        spreadRadius: 1,
-                      ),
-                    ],
+                if (leadingAction != null) ...[
+                  leadingAction!,
+                  const SizedBox(width: 8),
+                ] else ...[
+                  // Indicador de estado (pulso verde/cyan)
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isOnline ? AppColors.mintGreen : AppColors.amberWarning,
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isOnline ? AppColors.mintGreen : AppColors.amberWarning)
+                              .withValues(alpha: 0.6),
+                          blurRadius: 6,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
+                  const SizedBox(width: 12),
+                ],
 
                 // Título y subtítulo
                 Expanded(

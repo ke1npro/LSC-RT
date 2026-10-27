@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import '../entities/dtw_gesture_sample.dart';
 import '../entities/landmark_point.dart';
 
 /// Estado actual del detector de actividad cinemática.

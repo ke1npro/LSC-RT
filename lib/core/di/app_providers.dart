@@ -2,6 +2,8 @@ import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
+import '../services/tts_service.dart';
+import '../../data/datasources/avatar_motion_datasource.dart';
 import '../../data/datasources/camera_datasource.dart';
 import '../../data/datasources/local_storage_datasource.dart';
 import '../../data/datasources/vision_datasource_factory.dart';
@@ -16,6 +18,7 @@ import '../../domain/usecases/evaluate_posture_usecase.dart';
 import '../../domain/usecases/generate_wave_guide_usecase.dart';
 import '../../domain/usecases/predict_sign_usecase.dart';
 import '../../domain/usecases/resolve_body_pose_usecase.dart';
+import '../../presentation/viewmodels/avatar_viewmodel.dart';
 import '../../presentation/viewmodels/settings_viewmodel.dart';
 import '../../presentation/viewmodels/teaching_viewmodel.dart';
 import '../../presentation/viewmodels/translation_viewmodel.dart';
@@ -27,6 +30,8 @@ class AppProviders {
     final localStorage = LocalStorageDataSource();
     final visionDataSource = getVisionDataSource();
     final cameraDataSource = CameraDataSource(cameras);
+    final avatarDataSource = AvatarMotionDataSource();
+    final ttsService = TtsService();
 
     final IVisionRepository visionRepo = VisionRepositoryImpl(visionDataSource);
     final ISignRepository signRepo = SignRepositoryImpl(localStorage);
@@ -42,8 +47,10 @@ class AppProviders {
       Provider<IVisionRepository>.value(value: visionRepo),
       Provider<ISignRepository>.value(value: signRepo),
       Provider<ISettingsRepository>.value(value: settingsRepo),
+      Provider<AvatarMotionDataSource>.value(value: avatarDataSource),
+      Provider<ITtsService>.value(value: ttsService),
       ChangeNotifierProvider<SettingsViewModel>(
-        create: (_) => SettingsViewModel(settingsRepo)..initialize(),
+        create: (_) => SettingsViewModel(settingsRepo, signRepo)..initialize(),
       ),
       ChangeNotifierProvider<TranslationViewModel>(
         create: (_) => TranslationViewModel(
@@ -51,10 +58,14 @@ class AppProviders {
           visionRepository: visionRepo,
           signRepository: signRepo,
           settingsRepository: settingsRepo,
+          ttsService: ttsService,
           predictSignUseCase: predictUseCase,
           calibrateSignUseCase: calibrateUseCase,
           resolveBodyPoseUseCase: ResolveBodyPoseUseCase(),
         ),
+      ),
+      ChangeNotifierProvider<AvatarViewModel>(
+        create: (_) => AvatarViewModel(avatarDataSource)..initialize(),
       ),
       ChangeNotifierProvider<TeachingViewModel>(
         create: (_) => TeachingViewModel(
@@ -64,6 +75,7 @@ class AppProviders {
           resolveBodyPoseUseCase: ResolveBodyPoseUseCase(),
           generateWaveGuideUseCase: waveUseCase,
           evaluatePostureUseCase: evaluateUseCase,
+          avatarMotionDataSource: avatarDataSource,
         ),
       ),
     ];

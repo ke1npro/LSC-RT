@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import '../../core/services/tts_service.dart';
 import '../../data/datasources/camera_datasource.dart';
 import '../../domain/entities/body_pose.dart';
 import '../../domain/entities/face_bounds.dart';
@@ -18,6 +19,7 @@ class TranslationViewModel extends ChangeNotifier {
   final IVisionRepository visionRepository;
   final ISignRepository signRepository;
   final ISettingsRepository? settingsRepository;
+  final ITtsService? ttsService;
   final PredictSignUseCase predictSignUseCase;
   final CalibrateSignUseCase calibrateSignUseCase;
   final ResolveBodyPoseUseCase resolveBodyPoseUseCase;
@@ -34,7 +36,11 @@ class TranslationViewModel extends ChangeNotifier {
   SignPrediction? _currentPrediction;
   BodyPose? _currentPose;
 
-  // Calibración
+  // Historial de las últimas 5 palabras reconocidas
+  final List<String> _recentWords = [];
+  DateTime _lastWordTime = DateTime.fromMillisecondsSinceEpoch(0);
+
+  // Calibración (Placeholder no funcional en UI)
   bool _isCalibrating = false;
   String _targetLetter = 'A';
   final List<List<double>> _calibrationBuffer = [];
@@ -45,6 +51,7 @@ class TranslationViewModel extends ChangeNotifier {
     required this.visionRepository,
     required this.signRepository,
     this.settingsRepository,
+    this.ttsService,
     required this.predictSignUseCase,
     required this.calibrateSignUseCase,
     required this.resolveBodyPoseUseCase,
@@ -55,6 +62,7 @@ class TranslationViewModel extends ChangeNotifier {
   SignPrediction? get currentPrediction => _currentPrediction;
   BodyPose? get currentPose => _currentPose;
   bool get hasHand => _currentPose?.hasHand ?? false;
+  List<String> get recentWords => List.unmodifiable(_recentWords);
   bool get isFrontCamera =>
       cameraDataSource.currentCamera?.lensDirection ==
       CameraLensDirection.front;
@@ -74,6 +82,7 @@ class TranslationViewModel extends ChangeNotifier {
 
     await signRepository.initialize();
     await visionRepository.initialize();
+    await ttsService?.initialize();
     visionRepository.setRotation(settingsRepository?.modelRotationDegrees ?? 270);
 
     await _handSubscription?.cancel();
@@ -144,10 +153,15 @@ class TranslationViewModel extends ChangeNotifier {
       _currentPrediction = null;
     } else {
       final hand = hands.first;
-      // Predecir signo
       _currentPrediction = predictSignUseCase.execute(hand);
 
-      // Si está en modo calibración, acumular muestra
+      if (_currentPrediction != null &&
+          _currentPrediction!.isRecognized &&
+          _currentPrediction!.confidence >= 0.70) {
+        _registerRecognizedWord(_currentPrediction!.label);
+      }
+
+      // Si estuviera en modo calibración
       if (_isCalibrating && _calibrationBuffer.length < totalCalibrationSamples) {
         final sample = calibrateSignUseCase.extractNormalizedFeatures(hand);
         if (sample.isNotEmpty) {
@@ -160,6 +174,29 @@ class TranslationViewModel extends ChangeNotifier {
     }
 
     _recomputeBodyPose();
+    notifyListeners();
+  }
+
+  void _registerRecognizedWord(String word) {
+    final now = DateTime.now();
+    if (_recentWords.isNotEmpty &&
+        _recentWords.last == word &&
+        now.difference(_lastWordTime).inMilliseconds < 2500) {
+      return;
+    }
+
+    _lastWordTime = now;
+    _recentWords.add(word);
+    if (_recentWords.length > 5) {
+      _recentWords.removeAt(0);
+    }
+
+    // Audio no bloqueante
+    ttsService?.speak(word);
+  }
+
+  void clearRecentWords() {
+    _recentWords.clear();
     notifyListeners();
   }
 
@@ -214,6 +251,7 @@ class TranslationViewModel extends ChangeNotifier {
     _handSubscription?.cancel();
     _faceSubscription?.cancel();
     resolveBodyPoseUseCase.reset();
+    ttsService?.dispose();
     super.dispose();
   }
 }
