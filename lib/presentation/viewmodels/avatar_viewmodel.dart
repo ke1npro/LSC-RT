@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/theme/avatar_theme.dart';
 import '../../data/datasources/avatar_motion_datasource.dart';
 import '../../domain/entities/avatar_sign_data.dart';
 

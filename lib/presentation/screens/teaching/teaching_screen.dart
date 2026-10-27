@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/avatar_theme.dart';
 import '../../../domain/entities/avatar_sign_data.dart';
 import '../../viewmodels/settings_viewmodel.dart';
 import '../../viewmodels/teaching_viewmodel.dart';

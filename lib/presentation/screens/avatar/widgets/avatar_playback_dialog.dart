@@ -1,7 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../domain/entities/avatar_sign_data.dart';
+import '../../../../core/theme/avatar_theme.dart';
 import '../../../viewmodels/avatar_viewmodel.dart';
 import '../../../widgets/avatar/avatar_pose_painter.dart';
 

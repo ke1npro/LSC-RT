@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import '../../../core/theme/avatar_theme.dart';
 import '../../../domain/entities/avatar_sign_data.dart';
 
 /// Painter del Avatar ilustrado de Lengua de Señas.
