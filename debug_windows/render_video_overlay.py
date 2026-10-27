@@ -172,43 +172,54 @@ def draw_skeleton_from_row(frame, row):
             cv2.circle(frame, pt, 3, COLOR_RIGHT_HAND_JOINT, -1, cv2.LINE_AA)
 
 
-def build_side_by_side_image(start_frame_img, end_frame_img, start_idx, end_idx, sign_name=""):
+def build_side_by_side_image(start_frame_img, mid_frame_img, end_frame_img, start_idx, mid_idx, end_idx, sign_name=""):
     """
-    Combina el fotograma inicial y final en una sola imagen panorámica Side-by-Side
-    con encabezados estilizados para cada postura.
+    Combina el fotograma inicial, intermedio y final en una sola imagen panorámica (Tríptico)
+    con encabezados estilizados para cada postura clave del gesto.
     """
-    target_h = 540
+    target_h = 360
     aspect = start_frame_img.shape[1] / start_frame_img.shape[0]
-    target_w = int(target_h * aspect)
+    target_w = int(target_h * aspect)  # 640px para 16:9
 
     left_resized = cv2.resize(start_frame_img, (target_w, target_h), interpolation=cv2.INTER_AREA)
+    mid_resized = cv2.resize(mid_frame_img, (target_w, target_h), interpolation=cv2.INTER_AREA)
     right_resized = cv2.resize(end_frame_img, (target_w, target_h), interpolation=cv2.INTER_AREA)
 
-    # Altura de cabecera adicional
-    banner_h = 50
-    total_w = target_w * 2 + 10  # 10px separador central
+    banner_h = 46
+    gap = 6
+    total_w = target_w * 3 + gap * 2
     total_h = target_h + banner_h
 
     canvas = np.zeros((total_h, total_w, 3), dtype=np.uint8)
-    canvas[:] = (30, 30, 30)  # Fondo gris oscuro
+    canvas[:] = (24, 24, 24)  # Fondo grafito oscuro
 
-    # Dibujar marcos de imagen
-    canvas[banner_h:total_h, 0:target_w] = left_resized
-    canvas[banner_h:total_h, target_w + 10:total_w] = right_resized
+    # Dibujar paneles
+    x_left = 0
+    x_mid = target_w + gap
+    x_right = (target_w + gap) * 2
 
-    # Encabezado lado izquierdo
+    canvas[banner_h:total_h, x_left:x_left + target_w] = left_resized
+    canvas[banner_h:total_h, x_mid:x_mid + target_w] = mid_resized
+    canvas[banner_h:total_h, x_right:x_right + target_w] = right_resized
+
+    # Encabezado 1: Inicio
     label_start = f"INICIO ACTIVO - Frame {start_idx:03d}"
-    cv2.rectangle(canvas, (0, 0), (target_w, banner_h), (40, 40, 40), -1)
-    cv2.putText(canvas, label_start, (20, 34), cv2.FONT_HERSHEY_DUPLEX, 0.75, (0, 255, 200), 2, cv2.LINE_AA)
+    cv2.rectangle(canvas, (x_left, 0), (x_left + target_w, banner_h), (35, 35, 35), -1)
+    cv2.putText(canvas, label_start, (x_left + 15, 31), cv2.FONT_HERSHEY_DUPLEX, 0.65, (0, 255, 200), 2, cv2.LINE_AA)
 
-    # Encabezado lado derecho
-    label_end = f"FIN ACTIVO - Frame {end_idx:03d}"
-    cv2.rectangle(canvas, (target_w + 10, 0), (total_w, banner_h), (40, 40, 40), -1)
-    cv2.putText(canvas, label_end, (target_w + 30, 34), cv2.FONT_HERSHEY_DUPLEX, 0.75, (0, 200, 255), 2, cv2.LINE_AA)
+    # Encabezado 2: Pose Intermedia
+    label_mid = f"POSE INTERMEDIA - Frame {mid_idx:03d}"
+    cv2.rectangle(canvas, (x_mid, 0), (x_mid + target_w, banner_h), (35, 35, 35), -1)
+    cv2.putText(canvas, label_mid, (x_mid + 15, 31), cv2.FONT_HERSHEY_DUPLEX, 0.65, (0, 215, 255), 2, cv2.LINE_AA)
+
+    # Encabezado 3: Culminación
+    label_end = f"CULMINACION - Frame {end_idx:03d}"
+    cv2.rectangle(canvas, (x_right, 0), (x_right + target_w, banner_h), (35, 35, 35), -1)
+    cv2.putText(canvas, label_end, (x_right + 15, 31), cv2.FONT_HERSHEY_DUPLEX, 0.65, (50, 255, 120), 2, cv2.LINE_AA)
 
     # Título general en esquina superior derecha
     if sign_name:
-        cv2.putText(canvas, sign_name, (total_w - 260, 34), cv2.FONT_HERSHEY_DUPLEX, 0.7, (255, 255, 255), 1, cv2.LINE_AA)
+        cv2.putText(canvas, sign_name, (total_w - 280, 31), cv2.FONT_HERSHEY_DUPLEX, 0.65, (255, 255, 255), 1, cv2.LINE_AA)
 
     return canvas
 
@@ -254,7 +265,10 @@ def render_overlay_and_screenshots(video_path, csv_path, output_dir, sign_label=
         start_frame_idx = 0
         end_frame_idx = max(0, total_frames - 1)
 
+    mid_frame_idx = (start_frame_idx + end_frame_idx) // 2
+
     start_rendered_frame = None
+    mid_rendered_frame = None
     end_rendered_frame = None
 
     fidx = 0
@@ -283,6 +297,8 @@ def render_overlay_and_screenshots(video_path, csv_path, output_dir, sign_label=
 
         if fidx == start_frame_idx:
             start_rendered_frame = frame.copy()
+        if fidx == mid_frame_idx:
+            mid_rendered_frame = frame.copy()
         if fidx == end_frame_idx:
             end_rendered_frame = frame.copy()
 
@@ -294,24 +310,31 @@ def render_overlay_and_screenshots(video_path, csv_path, output_dir, sign_label=
     # Si por alguna razón no coincidieron exactamente los frames extremos
     if start_rendered_frame is None and fidx > 0:
         start_rendered_frame = frame.copy()
+    if mid_rendered_frame is None and fidx > 0:
+        mid_rendered_frame = start_rendered_frame.copy()
     if end_rendered_frame is None and fidx > 0:
         end_rendered_frame = frame.copy()
 
     # Guardar capturas individuales
     start_shot_path = os.path.join(screenshots_dir, f'{base_name}_start_active.png')
+    mid_shot_path = os.path.join(screenshots_dir, f'{base_name}_mid_active.png')
     end_shot_path = os.path.join(screenshots_dir, f'{base_name}_end_active.png')
     if start_rendered_frame is not None:
         cv2.imwrite(start_shot_path, start_rendered_frame)
+    if mid_rendered_frame is not None:
+        cv2.imwrite(mid_shot_path, mid_rendered_frame)
     if end_rendered_frame is not None:
         cv2.imwrite(end_shot_path, end_rendered_frame)
 
-    # Composición Side-by-Side
+    # Composición Side-by-Side (Tríptico con pose intermedia)
     side_by_side_path = os.path.join(screenshots_dir, f'{base_name}_side_by_side.png')
-    if start_rendered_frame is not None and end_rendered_frame is not None:
+    if start_rendered_frame is not None and mid_rendered_frame is not None and end_rendered_frame is not None:
         sbs_img = build_side_by_side_image(
             start_rendered_frame,
+            mid_rendered_frame,
             end_rendered_frame,
             start_frame_idx,
+            mid_frame_idx,
             end_frame_idx,
             sign_name=sign_label
         )
@@ -320,9 +343,11 @@ def render_overlay_and_screenshots(video_path, csv_path, output_dir, sign_label=
     return {
         'video_overlay': out_video_path,
         'start_shot': start_shot_path,
+        'mid_shot': mid_shot_path,
         'end_shot': end_shot_path,
         'side_by_side': side_by_side_path,
         'start_frame': start_frame_idx,
+        'mid_frame': mid_frame_idx,
         'end_frame': end_frame_idx
     }
 
