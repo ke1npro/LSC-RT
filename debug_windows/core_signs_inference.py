@@ -65,9 +65,9 @@ CORE_NAMES = [
     "TÚ"              # 39: Unimanual / Apuntar al frente
 ]
 
-# Conjuntos de segregación fonológica
+# Conjuntos de segregación fonológica (GRACIAS es bimanual o unimanual en LSC)
 BIMANUAL_CORE = {"GRACIAS", "BUENOS DÍAS", "BUENAS TARDES", "BUENAS NOCHES", "¿CÓMO ESTÁS?", "PERDÓN"}
-UNIMANUAL_CORE = {"BIEN", "MAL", "MÁS O MENOS", "HOLA", "ADIÓS", "POR FAVOR", "CON GUSTO", "YO", "TÚ"}
+UNIMANUAL_CORE = {"GRACIAS", "BIEN", "MAL", "MÁS O MENOS", "HOLA", "ADIÓS", "POR FAVOR", "CON GUSTO", "YO", "TÚ"}
 
 T_TARGET = 64
 POSE_INDICES = [0, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
@@ -207,6 +207,7 @@ def analyze_hand_geometry(pts_21):
 
     wrist = pts_21[0]
     thumb_tip = pts_21[4]
+    thumb_mcp = pts_21[2]
     index_tip = pts_21[8]
     index_pip = pts_21[6]
     middle_tip = pts_21[12]
@@ -216,31 +217,44 @@ def analyze_hand_geometry(pts_21):
     pinky_tip = pts_21[20]
     pinky_pip = pts_21[18]
 
-    # Estado de dedos (distancia a la muñeca)
-    d_wrist_idx = np.linalg.norm(index_tip[:2] - wrist[:2])
-    d_wrist_mid = np.linalg.norm(middle_tip[:2] - wrist[:2])
-    d_wrist_rng = np.linalg.norm(ring_tip[:2] - wrist[:2])
-    d_wrist_pnk = np.linalg.norm(pinky_tip[:2] - wrist[:2])
+    # Flexión geométrica invariante a la distancia y encuadre de cámara:
+    # Un dedo está plegado en puño si su punta está más cerca de la muñeca que su articulación PIP
+    d_idx_tip = np.linalg.norm(index_tip[:2] - wrist[:2])
+    d_idx_pip = np.linalg.norm(index_pip[:2] - wrist[:2])
+    idx_folded = d_idx_tip < (d_idx_pip * 1.05)
 
-    # Dedos plegados (puntas cerca de la palma/muñeca en comparación con PIP)
-    idx_folded = index_tip[1] > index_pip[1] - 0.02 or d_wrist_idx < 0.10
-    mid_folded = middle_tip[1] > middle_pip[1] - 0.02 or d_wrist_mid < 0.10
-    rng_folded = ring_tip[1] > ring_pip[1] - 0.02 or d_wrist_rng < 0.10
-    pnk_folded = pinky_tip[1] > pinky_pip[1] - 0.02 or d_wrist_pnk < 0.10
+    d_mid_tip = np.linalg.norm(middle_tip[:2] - wrist[:2])
+    d_mid_pip = np.linalg.norm(middle_pip[:2] - wrist[:2])
+    mid_folded = d_mid_tip < (d_mid_pip * 1.05)
+
+    d_rng_tip = np.linalg.norm(ring_tip[:2] - wrist[:2])
+    d_rng_pip = np.linalg.norm(ring_pip[:2] - wrist[:2])
+    rng_folded = d_rng_tip < (d_rng_pip * 1.05)
+
+    d_pnk_tip = np.linalg.norm(pinky_tip[:2] - wrist[:2])
+    d_pnk_pip = np.linalg.norm(pinky_pip[:2] - wrist[:2])
+    pnk_folded = d_pnk_tip < (d_pnk_pip * 1.05)
 
     is_fist = idx_folded and mid_folded and rng_folded and pnk_folded
 
-    # Pulgar extendido verticalmente
-    thumb_is_up = is_fist and (thumb_tip[1] < wrist[1] - 0.06)
-    thumb_is_down = is_fist and (thumb_tip[1] > wrist[1] + 0.05)
+    # Pulgar Arriba REAL (BIEN):
+    # Requiere que los 4 dedos estén estrictamente en puño, y que la punta del pulgar
+    # sea el punto más alto de toda la mano superando ampliamente a su nudillo MCP
+    min_other_tips_y = min(index_tip[1], middle_tip[1], ring_tip[1], pinky_tip[1])
+    thumb_is_up = is_fist and (thumb_tip[1] < thumb_mcp[1] - 0.04) and (thumb_tip[1] < min_other_tips_y - 0.03)
 
-    # Índice apuntando solo
+    # Pulgar Abajo REAL (MAL):
+    max_other_tips_y = max(index_tip[1], middle_tip[1], ring_tip[1], pinky_tip[1])
+    thumb_is_down = is_fist and (thumb_tip[1] > thumb_mcp[1] + 0.04) and (thumb_tip[1] > max_other_tips_y + 0.03)
+
+    # Índice apuntando (YO / TÚ):
+    # Solo el dedo índice está extendido, los otros tres dedos plegados
     is_pointing = (not idx_folded) and mid_folded and rng_folded and pnk_folded
 
-    # Mano abierta (todos los dedos extendidos)
+    # Mano abierta (HOLA / ADIÓS / MÁS O MENOS / GRACIAS):
     is_open = (not idx_folded) and (not mid_folded) and (not rng_folded) and (not pnk_folded)
 
-    # Inclinación / Roll de la palma (vector de muñeca a nudillo medio)
+    # Inclinación / Roll de la palma
     mcp_mid = pts_21[9]
     vec_wrist_mid = mcp_mid[:2] - wrist[:2]
     roll_angle = float(np.arctan2(vec_wrist_mid[1], vec_wrist_mid[0]))
@@ -326,38 +340,61 @@ def classify_core_gesture(pose_buffer, lh_buffer, rh_buffer, mask_buffer,
     mean_wy = float(np.mean(wrist_ys)) if len(wrist_ys) > 0 else 0.5
 
     # ==========================================================================
-    # REGLAS GEOMÉTRICAS DETERMINISTAS DE ALTA CONFIANZA
+    # REGLAS GEOMÉTRICAS Y CINEMÁTICAS DETERMINISTAS DE ALTA CONFIANZA
     # ==========================================================================
 
-    # A. Pulgar Arriba -> 'BIEN' (100% Determinista)
+    # A. Pulgar Arriba REAL -> 'BIEN' (100% Determinista, requiere puño cerrado real)
     if not is_bimanual and geom and geom['thumb_up']:
         return "BIEN", 0.96, [("BIEN", 0.96), ("CON GUSTO", 0.03), ("GRACIAS", 0.01)]
 
-    # B. Pulgar Abajo -> 'MAL' (100% Determinista)
+    # B. Pulgar Abajo REAL -> 'MAL' (100% Determinista, requiere puño cerrado real)
     if not is_bimanual and geom and geom['thumb_down']:
         return "MAL", 0.95, [("MAL", 0.95), ("MÁS O MENOS", 0.03), ("BIEN", 0.02)]
 
-    # C. Señalar (Pointing)
+    # C. Trayectoria Chin-to-Front -> 'GRACIAS' (Unimanual o Bimanual)
+    # En LSC la mano inicia en la barbilla/boca y avanza hacia adelante/abajo
+    if len(wrist_ys) > 6:
+        y_ini = np.mean(wrist_ys[:3])
+        y_fin = np.mean(wrist_ys[-3:])
+        # Si inicia alto (zona barbilla/boca) y desciende/avanza
+        if y_ini < sh_y + 0.04 and (y_fin - y_ini) > 0.030:
+            return "GRACIAS", 0.95, [("GRACIAS", 0.95), ("BUENOS DÍAS", 0.03), ("CON GUSTO", 0.02)]
+
+    # D. 'BUENOS DÍAS' Bimanual: Manos parten juntas en el centro y abren hacia afuera
+    if is_bimanual and len(lh_buffer) > 6 and len(rh_buffer) > 6:
+        sep_ini = []
+        sep_fin = []
+        for i in range(min(4, len(lh_buffer))):
+            if not np.isnan(lh_buffer[i]).any() and not np.isnan(rh_buffer[i]).any():
+                sep_ini.append(abs(lh_buffer[i][0, 0] - rh_buffer[i][0, 0]))
+        for i in range(len(lh_buffer) - min(4, len(lh_buffer)), len(lh_buffer)):
+            if not np.isnan(lh_buffer[i]).any() and not np.isnan(rh_buffer[i]).any():
+                sep_fin.append(abs(lh_buffer[i][0, 0] - rh_buffer[i][0, 0]))
+        if sep_ini and sep_fin and (np.mean(sep_fin) - np.mean(sep_ini)) > 0.06:
+            return "BUENOS DÍAS", 0.94, [("BUENOS DÍAS", 0.94), ("BUENAS TARDES", 0.03), ("GRACIAS", 0.03)]
+
+    # E. Señalamiento o Toque al Pecho -> 'YO'
+    if not is_bimanual and last_pose is not None:
+        chest_x = (last_pose[5, 0] + last_pose[6, 0]) / 2.0
+        # Índice apuntando al pecho o mano apoyada en esternón
+        if geom and (geom['pointing'] or abs(geom['wrist_x'] - chest_x) < 0.12):
+            if geom['wrist_y'] >= sh_y - 0.06:
+                return "YO", 0.93, [("YO", 0.93), ("TÚ", 0.05), ("CON GUSTO", 0.02)]
+
+    # F. Señalamiento al frente -> 'TÚ'
     if not is_bimanual and geom and geom['pointing']:
-        # Si la mano apunta hacia el pecho
-        if last_pose is not None:
-            chest_x = (last_pose[5, 0] + last_pose[6, 0]) / 2.0
-            idx_x = geom['index_tip'][0]
-            # Si el índice apunta al torso
-            if abs(idx_x - chest_x) < 0.15 and geom['wrist_y'] >= sh_y - 0.05:
-                return "YO", 0.94, [("YO", 0.94), ("TÚ", 0.04), ("CON GUSTO", 0.02)]
         return "TÚ", 0.92, [("TÚ", 0.92), ("YO", 0.05), ("ADIÓS", 0.03)]
 
-    # D. Waving en zona alta (cabeza / espacio neutro alto) -> 'ADIÓS'
-    if not is_bimanual and mean_wy < sh_y and span_x > 0.07:
+    # G. Waving en zona alta (cabeza / espacio neutro alto) -> 'ADIÓS'
+    if not is_bimanual and mean_wy < sh_y and span_x > 0.06:
         return "ADIÓS", 0.93, [("ADIÓS", 0.93), ("HOLA", 0.05), ("GRACIAS", 0.02)]
 
-    # E. Mano abierta fija junto a la sien/cabeza -> 'HOLA'
+    # H. Mano abierta fija junto a la sien/cabeza -> 'HOLA'
     if not is_bimanual and mean_wy < sh_y and span_x <= 0.06 and geom and geom['open_palm']:
         return "HOLA", 0.91, [("HOLA", 0.91), ("ADIÓS", 0.06), ("BUENOS DÍAS", 0.03)]
 
-    # F. Oscilación angular de muñeca a media altura -> 'MÁS O MENOS'
-    if not is_bimanual and roll_var > 0.08 and geom and geom['open_palm']:
+    # I. Oscilación angular de muñeca a media altura -> 'MÁS O MENOS'
+    if not is_bimanual and roll_var > 0.06 and geom and geom['open_palm']:
         return "MÁS O MENOS", 0.92, [("MÁS O MENOS", 0.92), ("CON GUSTO", 0.05), ("BIEN", 0.03)]
 
     # ==========================================================================
