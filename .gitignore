@@ -56,8 +56,10 @@ app.*.map.json
 /assets/*.task
 /assets/overlays/
 *.py
+!debug_windows/*.py
 *.pyc
 __pycache__/
+debug_windows/output/
 requirements.txt
 plan.md
 fast_dtw.*
