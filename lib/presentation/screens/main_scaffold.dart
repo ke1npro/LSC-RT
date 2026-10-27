@@ -41,44 +41,35 @@ class _MainScaffoldState extends State<MainScaffold> {
                 top: BorderSide(color: AppColors.glassBorder),
               ),
             ),
-            child: BottomNavigationBar(
-              currentIndex: _currentIndex,
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              selectedItemColor: AppColors.cyanAccent,
-              unselectedItemColor: AppColors.textSecondary,
-              selectedFontSize: 12,
-              unselectedFontSize: 11,
-              type: BottomNavigationBarType.fixed,
-              onTap: (index) {
-                setState(() => _currentIndex = index);
-              },
-              items: const [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.translate_rounded),
-                  activeIcon:
-                      Icon(Icons.translate_rounded, color: AppColors.cyanAccent),
-                  label: 'Traducción',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.accessibility_new_rounded),
-                  activeIcon: Icon(Icons.accessibility_new_rounded,
-                      color: AppColors.cyanAccent),
-                  label: 'Avatar',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.school_outlined),
-                  activeIcon:
-                      Icon(Icons.school_rounded, color: AppColors.cyanAccent),
-                  label: 'Enseñanza',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.settings_outlined),
-                  activeIcon:
-                      Icon(Icons.settings_rounded, color: AppColors.cyanAccent),
-                  label: 'Configuración',
-                ),
-              ],
+            child: SafeArea(
+              top: false,
+              child: NavigationBar(
+                selectedIndex: _currentIndex,
+                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                onDestinationSelected: (index) {
+                  setState(() => _currentIndex = index);
+                },
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.translate_rounded),
+                    label: 'Traducción',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.accessibility_new_rounded),
+                    label: 'Avatar',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.school_outlined),
+                    selectedIcon: Icon(Icons.school_rounded),
+                    label: 'Enseñanza',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.settings_outlined),
+                    selectedIcon: Icon(Icons.settings_rounded),
+                    label: 'Configuración',
+                  ),
+                ],
+              ),
             ),
           ),
         ),

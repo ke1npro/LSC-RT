@@ -161,7 +161,11 @@ class AvatarPlaybackDialog extends StatelessWidget {
                           borderRadius: BorderRadius.circular(20),
                           child: Container(
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0A0F1D),
+                              gradient: const LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [Color(0xFF151D33), Color(0xFF0B1020)],
+                              ),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
                                 color: AppColors.cyanAccent.withValues(alpha: 0.15),
@@ -170,12 +174,6 @@ class AvatarPlaybackDialog extends StatelessWidget {
                             child: Stack(
                               fit: StackFit.expand,
                               children: [
-                                // Rejilla sutil de fondo para ambiente de laboratorio 3D
-                                CustomPaint(
-                                  size: Size.infinite,
-                                  painter: _AvatarGridBackgroundPainter(),
-                                ),
-
                                 // Avatar cinemático
                                 CustomPaint(
                                   size: Size.infinite,
@@ -334,22 +332,16 @@ class AvatarPlaybackDialog extends StatelessWidget {
                             onSelected: (t) => viewModel.setTheme(t),
                             itemBuilder: (context) => [
                               PopupMenuItem(
-                                value: AvatarTheme.neon(),
-                                child: const Text('Neón Futurista'),
+                                value: AvatarTheme.character(),
+                                child: const Text('Personaje'),
                               ),
                               PopupMenuItem(
                                 value: AvatarTheme.highContrast(),
                                 child: const Text('Alto Contraste Didáctico'),
                               ),
-                              const PopupMenuItem(
-                                value: AvatarTheme(
-                                  torsoColor: Color(0xFF10B981),
-                                  leftArmColor: Color(0xFF34D399),
-                                  rightArmColor: Color(0xFF6EE7B7),
-                                  headColor: Color(0xFF059669),
-                                  glowSigma: 4.0,
-                                ),
-                                child: Text('Esmeralda Tecnológico'),
+                              PopupMenuItem(
+                                value: AvatarTheme.emerald(),
+                                child: const Text('Esmeralda'),
                               ),
                             ],
                             child: Container(
@@ -390,24 +382,4 @@ class AvatarPlaybackDialog extends StatelessWidget {
       },
     );
   }
-}
-
-class _AvatarGridBackgroundPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.03)
-      ..strokeWidth = 1.0;
-
-    const step = 28.0;
-    for (double x = 0; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    for (double y = 0; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

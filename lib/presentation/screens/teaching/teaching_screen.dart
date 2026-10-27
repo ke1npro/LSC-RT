@@ -335,9 +335,13 @@ class _TeachingScreenState extends State<TeachingScreen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(24),
                   child: Container(
-                    height: 280,
+                    height: 340,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0A0F1D),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0xFF151D33), Color(0xFF0B1020)],
+                      ),
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(
                         color: AppColors.cyanAccent.withValues(alpha: 0.25),
@@ -350,7 +354,7 @@ class _TeachingScreenState extends State<TeachingScreen> {
                           size: Size.infinite,
                           painter: AvatarPosePainter(
                             frame: vm.currentDemoFrame,
-                            theme: AvatarTheme.highContrast(),
+                            theme: AvatarTheme.character(),
                           ),
                         ),
                         Positioned(
@@ -587,7 +591,7 @@ class _TeachingScreenState extends State<TeachingScreen> {
                         size: Size.infinite,
                         painter: AvatarPosePainter(
                           frame: vm.currentDemoFrame,
-                          theme: AvatarTheme.highContrast(),
+                          theme: const AvatarTheme(showBackdrop: false),
                         ),
                       ),
                       Positioned(
