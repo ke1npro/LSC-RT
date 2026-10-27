@@ -45,29 +45,51 @@ TFLITE_MODEL_PATH = os.path.join(WORKSPACE_DIR, 'assets', 'lsc50_classifier.tfli
 POSE_MODEL_PATH = os.path.join(WORKSPACE_DIR, 'assets', 'pose_landmarker_lite.task')
 HAND_MODEL_PATH = os.path.join(WORKSPACE_DIR, 'assets', 'hand_landmarker.task')
 
-# 15 Clases Esenciales (Índices y Nombres correspondientes en LSC50)
-CORE_INDICES = [0, 1, 2, 3, 24, 25, 26, 27, 30, 31, 32, 33, 35, 38, 39]
-CORE_NAMES = [
-    "GRACIAS",        # 0:  Bimanual / Barbilla a mano base
-    "BUENOS DÍAS",   # 1:  Bimanual / Pecho hacia afuera
-    "BUENAS TARDES",  # 2:  Bimanual / Mano cruza base
-    "BUENAS NOCHES",  # 3:  Bimanual / Mano cubre base
-    "BIEN",           # 24: Unimanual / Pulgar arriba
-    "MAL",            # 25: Unimanual / Pulgar abajo
-    "¿CÓMO ESTÁS?",   # 26: Bimanual / Palmas arriba oscilando
-    "MÁS O MENOS",    # 27: Unimanual / Oscilación de muñeca
-    "HOLA",           # 30: Unimanual / Mano abierta en sien
-    "ADIÓS",          # 31: Unimanual / Mano abierta waving alto
-    "POR FAVOR",      # 32: Unimanual / Círculo en pecho
-    "CON GUSTO",      # 33: Unimanual / Mano abierta en pecho
-    "PERDÓN",         # 35: Bimanual / Frotar manos o barbilla
-    "YO",             # 38: Unimanual / Apuntar al pecho
-    "TÚ"              # 39: Unimanual / Apuntar al frente
+# 22 Clases Robustas de Alto Desempeño (>=90% de exactitud en evaluación completa)
+CORE_INDICES = [
+    10, # FAMILIA (100%)
+    6,  # TRABAJAR (100%)
+    20, # FELIZ (100%)
+    29, # JUICIOSO (100%)
+    47, # DIFERENTE (100%)
+    48, # TODOS (100%)
+    41, # ¿QUÉ? (100%)
+    19, # HAMBRE (100%)
+    28, # SENTIR (100%)
+    8,  # VIVIR (100%)
+    1,  # BUENOS DÍAS (100%)
+    3,  # BUENAS NOCHES (100%)
+    38, # YO (100%)
+    0,  # GRACIAS (95%)
+    2,  # BUENAS TARDES (95%)
+    18, # HERMANO (95%)
+    34, # BIENVENIDO (95%)
+    35, # PERDÓN (95%)
+    40, # USTEDES (95%)
+    46, # ¿QUIÉN? (95%)
+    32, # POR FAVOR (90%)
+    39  # TÚ (90%)
 ]
 
-# Conjuntos de segregación fonológica (GRACIAS es bimanual o unimanual en LSC)
-BIMANUAL_CORE = {"GRACIAS", "BUENOS DÍAS", "BUENAS TARDES", "BUENAS NOCHES", "¿CÓMO ESTÁS?", "PERDÓN"}
-UNIMANUAL_CORE = {"GRACIAS", "BIEN", "MAL", "MÁS O MENOS", "HOLA", "ADIÓS", "POR FAVOR", "CON GUSTO", "YO", "TÚ"}
+CORE_NAMES = [
+    "FAMILIA", "TRABAJAR", "FELIZ", "JUICIOSO", "DIFERENTE",
+    "TODOS", "¿QUÉ?", "HAMBRE", "SENTIR", "VIVIR",
+    "BUENOS DÍAS", "BUENAS NOCHES", "YO", "GRACIAS", "BUENAS TARDES",
+    "HERMANO", "BIENVENIDO", "PERDÓN", "USTEDES", "¿QUIÉN?",
+    "POR FAVOR", "TÚ"
+]
+
+# Segregación Fonológica (Bimanual vs Unimanual)
+BIMANUAL_CORE = {
+    "FAMILIA", "TRABAJAR", "DIFERENTE", "¿QUÉ?", "BUENOS DÍAS",
+    "BUENAS NOCHES", "BUENAS TARDES", "HERMANO", "BIENVENIDO",
+    "PERDÓN", "GRACIAS", "VIVIR", "FELIZ"
+}
+UNIMANUAL_CORE = {
+    "YO", "TÚ", "USTEDES", "TODOS", "HAMBRE",
+    "SENTIR", "JUICIOSO", "¿QUIÉN?", "POR FAVOR",
+    "GRACIAS", "FELIZ", "VIVIR"
+}
 
 T_TARGET = 64
 POSE_INDICES = [0, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
@@ -340,27 +362,19 @@ def classify_core_gesture(pose_buffer, lh_buffer, rh_buffer, mask_buffer,
     mean_wy = float(np.mean(wrist_ys)) if len(wrist_ys) > 0 else 0.5
 
     # ==========================================================================
-    # REGLAS GEOMÉTRICAS Y CINEMÁTICAS DETERMINISTAS DE ALTA CONFIANZA
+    # REGLAS CINEMÁTICAS CLAVE DE ALTA PRIORIDAD
     # ==========================================================================
 
-    # A. Pulgar Arriba REAL -> 'BIEN' (100% Determinista, requiere puño cerrado real)
-    if not is_bimanual and geom and geom['thumb_up']:
-        return "BIEN", 0.96, [("BIEN", 0.96), ("CON GUSTO", 0.03), ("GRACIAS", 0.01)]
-
-    # B. Pulgar Abajo REAL -> 'MAL' (100% Determinista, requiere puño cerrado real)
-    if not is_bimanual and geom and geom['thumb_down']:
-        return "MAL", 0.95, [("MAL", 0.95), ("MÁS O MENOS", 0.03), ("BIEN", 0.02)]
-
-    # C. Trayectoria Chin-to-Front -> 'GRACIAS' (Unimanual o Bimanual)
+    # A. Trayectoria Chin-to-Front -> 'GRACIAS' (Unimanual o Bimanual)
     # En LSC la mano inicia en la barbilla/boca y avanza hacia adelante/abajo
     if len(wrist_ys) > 6:
         y_ini = np.mean(wrist_ys[:3])
         y_fin = np.mean(wrist_ys[-3:])
         # Si inicia alto (zona barbilla/boca) y desciende/avanza
-        if y_ini < sh_y + 0.04 and (y_fin - y_ini) > 0.030:
-            return "GRACIAS", 0.95, [("GRACIAS", 0.95), ("BUENOS DÍAS", 0.03), ("CON GUSTO", 0.02)]
+        if y_ini < sh_y + 0.04 and (y_fin - y_ini) > 0.035:
+            return "GRACIAS", 0.96, [("GRACIAS", 0.96), ("BUENOS DÍAS", 0.02), ("POR FAVOR", 0.02)]
 
-    # D. 'BUENOS DÍAS' Bimanual: Manos parten juntas en el centro y abren hacia afuera
+    # B. 'BUENOS DÍAS' Bimanual: Manos parten juntas en el centro y abren hacia afuera
     if is_bimanual and len(lh_buffer) > 6 and len(rh_buffer) > 6:
         sep_ini = []
         sep_fin = []
@@ -371,31 +385,18 @@ def classify_core_gesture(pose_buffer, lh_buffer, rh_buffer, mask_buffer,
             if not np.isnan(lh_buffer[i]).any() and not np.isnan(rh_buffer[i]).any():
                 sep_fin.append(abs(lh_buffer[i][0, 0] - rh_buffer[i][0, 0]))
         if sep_ini and sep_fin and (np.mean(sep_fin) - np.mean(sep_ini)) > 0.06:
-            return "BUENOS DÍAS", 0.94, [("BUENOS DÍAS", 0.94), ("BUENAS TARDES", 0.03), ("GRACIAS", 0.03)]
+            return "BUENOS DÍAS", 0.95, [("BUENOS DÍAS", 0.95), ("BUENAS TARDES", 0.03), ("FAMILIA", 0.02)]
 
-    # E. Señalamiento o Toque al Pecho -> 'YO'
+    # C. Señalamiento o Toque al Pecho -> 'YO'
     if not is_bimanual and last_pose is not None:
         chest_x = (last_pose[5, 0] + last_pose[6, 0]) / 2.0
-        # Índice apuntando al pecho o mano apoyada en esternón
         if geom and (geom['pointing'] or abs(geom['wrist_x'] - chest_x) < 0.12):
             if geom['wrist_y'] >= sh_y - 0.06:
-                return "YO", 0.93, [("YO", 0.93), ("TÚ", 0.05), ("CON GUSTO", 0.02)]
+                return "YO", 0.95, [("YO", 0.95), ("TÚ", 0.03), ("POR FAVOR", 0.02)]
 
-    # F. Señalamiento al frente -> 'TÚ'
+    # D. Señalamiento al frente -> 'TÚ'
     if not is_bimanual and geom and geom['pointing']:
-        return "TÚ", 0.92, [("TÚ", 0.92), ("YO", 0.05), ("ADIÓS", 0.03)]
-
-    # G. Waving en zona alta (cabeza / espacio neutro alto) -> 'ADIÓS'
-    if not is_bimanual and mean_wy < sh_y and span_x > 0.06:
-        return "ADIÓS", 0.93, [("ADIÓS", 0.93), ("HOLA", 0.05), ("GRACIAS", 0.02)]
-
-    # H. Mano abierta fija junto a la sien/cabeza -> 'HOLA'
-    if not is_bimanual and mean_wy < sh_y and span_x <= 0.06 and geom and geom['open_palm']:
-        return "HOLA", 0.91, [("HOLA", 0.91), ("ADIÓS", 0.06), ("BUENOS DÍAS", 0.03)]
-
-    # I. Oscilación angular de muñeca a media altura -> 'MÁS O MENOS'
-    if not is_bimanual and roll_var > 0.06 and geom and geom['open_palm']:
-        return "MÁS O MENOS", 0.92, [("MÁS O MENOS", 0.92), ("CON GUSTO", 0.05), ("BIEN", 0.03)]
+        return "TÚ", 0.93, [("TÚ", 0.93), ("YO", 0.05), ("USTEDES", 0.02)]
 
     # ==========================================================================
     # RED NEURONAL RESTRINGIDA AL SUBCONJUNTO FONOLÓGICO COMPATIBLE
@@ -559,33 +560,41 @@ def draw_hud(frame, current_phrase, previous_phrases, last_sign, last_conf, top3
         draw_text_shadow(frame, "Esperando seña activa...", (sidebar_x + 14, pred_y + 85), 0.48, (160, 168, 185), 1)
 
     # --------------------------------------------------------------------------
-    # 5. TARJETA GLOSARIO DE 15 SEÑAS ACTIVAS (Categorizado y legible)
+    # 5. TARJETA GLOSARIO DE 22 SEÑAS ROBUSTAS (Exactitud >= 90%)
     # --------------------------------------------------------------------------
-    draw_text_shadow(frame, "GLOSARIO ACTIVO (15 SEÑAS)", (sidebar_x + 14, glos_y + 24), 0.50, (255, 190, 11), 2)
+    draw_text_shadow(frame, "GLOSARIO ACTIVO (22 SEÑAS ROBUSTAS)", (sidebar_x + 14, glos_y + 24), 0.48, (255, 190, 11), 2)
 
-    # Sección Saludos
-    draw_text_shadow(frame, "SALUDOS:", (sidebar_x + 14, glos_y + 50), 0.42, (0, 242, 254), 1)
-    draw_text_shadow(frame, "• HOLA", (sidebar_x + 14, glos_y + 70), 0.44, (240, 245, 255), 1)
-    draw_text_shadow(frame, "• ADIÓS", (sidebar_x + 14, glos_y + 90), 0.44, (240, 245, 255), 1)
-    draw_text_shadow(frame, "• BUENOS DÍAS", (sidebar_x + 140, glos_y + 70), 0.44, (240, 245, 255), 1)
-    draw_text_shadow(frame, "• BUENAS TARDES", (sidebar_x + 140, glos_y + 90), 0.44, (240, 245, 255), 1)
-    draw_text_shadow(frame, "• BUENAS NOCHES", (sidebar_x + 14, glos_y + 110), 0.44, (240, 245, 255), 1)
+    col1 = [
+        "• FAMILIA (100%)",
+        "• TRABAJAR (100%)",
+        "• HERMANO (95%)",
+        "• YO (100%)",
+        "• TÚ (90%)",
+        "• USTEDES (95%)",
+        "• TODOS (100%)",
+        "• VIVIR (100%)",
+        "• HAMBRE (100%)",
+        "• JUICIOSO (100%)",
+        "• FELIZ (100%)"
+    ]
+    col2 = [
+        "• GRACIAS (95%)",
+        "• BUENOS DÍAS (100%)",
+        "• BUENAS TARDES (95%)",
+        "• BUENAS NOCHES (100%)",
+        "• BIENVENIDO (95%)",
+        "• PERDÓN (95%)",
+        "• POR FAVOR (90%)",
+        "• ¿QUÉ? (100%)",
+        "• ¿QUIÉN? (95%)",
+        "• SENTIR (100%)",
+        "• DIFERENTE (100%)"
+    ]
 
-    # Sección Cortesía
-    draw_text_shadow(frame, "CORTESÍA:", (sidebar_x + 14, glos_y + 138), 0.42, (0, 242, 254), 1)
-    draw_text_shadow(frame, "• GRACIAS", (sidebar_x + 14, glos_y + 158), 0.44, (240, 245, 255), 1)
-    draw_text_shadow(frame, "• POR FAVOR", (sidebar_x + 14, glos_y + 178), 0.44, (240, 245, 255), 1)
-    draw_text_shadow(frame, "• CON GUSTO", (sidebar_x + 140, glos_y + 158), 0.44, (240, 245, 255), 1)
-    draw_text_shadow(frame, "• PERDÓN", (sidebar_x + 140, glos_y + 178), 0.44, (240, 245, 255), 1)
-
-    # Sección Estados y Pronombres
-    draw_text_shadow(frame, "ESTADOS Y PRONOMBRES:", (sidebar_x + 14, glos_y + 206), 0.42, (0, 242, 254), 1)
-    draw_text_shadow(frame, "• BIEN", (sidebar_x + 14, glos_y + 226), 0.44, (240, 245, 255), 1)
-    draw_text_shadow(frame, "• MAL", (sidebar_x + 14, glos_y + 246), 0.44, (240, 245, 255), 1)
-    draw_text_shadow(frame, "• ¿CÓMO ESTÁS?", (sidebar_x + 110, glos_y + 226), 0.44, (240, 245, 255), 1)
-    draw_text_shadow(frame, "• MÁS O MENOS", (sidebar_x + 110, glos_y + 246), 0.44, (240, 245, 255), 1)
-    draw_text_shadow(frame, "• YO", (sidebar_x + 14, glos_y + 266), 0.44, (240, 245, 255), 1)
-    draw_text_shadow(frame, "• TÚ", (sidebar_x + 110, glos_y + 266), 0.44, (240, 245, 255), 1)
+    for idx_row in range(len(col1)):
+        row_y = glos_y + 48 + idx_row * 24
+        draw_text_shadow(frame, col1[idx_row], (sidebar_x + 12, row_y), 0.38, (240, 245, 255), 1)
+        draw_text_shadow(frame, col2[idx_row], (sidebar_x + 160, row_y), 0.38, (240, 245, 255), 1)
 
     # --------------------------------------------------------------------------
     # 6. PANEL INFERIOR: FRASE ACTUAL E HISTORIAL
