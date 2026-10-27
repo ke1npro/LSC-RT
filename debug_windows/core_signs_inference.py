@@ -402,147 +402,178 @@ def classify_core_gesture(pose_buffer, lh_buffer, rh_buffer, mask_buffer,
 
 
 # ==============================================================================
-# RENDERIZADO VISUAL HUD
+# RENDERIZADO VISUAL HUD (ALTA LEGIBILIDAD Y CONTRASTE)
 # ==============================================================================
+
+def draw_text_shadow(img, text, pos, font_scale=0.5, color=(255, 255, 255), thickness=1):
+    """Renderiza texto nítido con sombra negra de 1px para máxima legibilidad."""
+    x, y = int(pos[0]), int(pos[1])
+    cv2.putText(img, text, (x + 1, y + 1), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), thickness + 1, cv2.LINE_AA)
+    cv2.putText(img, text, (x, y), cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness, cv2.LINE_AA)
+
 
 def draw_hud(frame, current_phrase, previous_phrases, last_sign, last_conf, top3_preds,
              motion_energy, is_bimanual, is_active, is_manual_mode, is_manual_recording,
              fps, latency_ms, show_skeleton):
     H, W = frame.shape[:2]
-    overlay = frame.copy()
 
-    # 1. Barra Superior
-    cv2.rectangle(overlay, (0, 0), (W, 58), (14, 16, 22), -1)
+    # Dimensiones fijas de tarjetas HUD
+    top_h = 62
+    bottom_h = 125
+    bottom_y = H - bottom_h
+
+    sidebar_w = 310
+    sidebar_x = W - sidebar_w - 15
+    pred_y = top_h + 12
+    pred_h = 150
+    glos_y = pred_y + pred_h + 12
+    glos_h = bottom_y - glos_y - 12
+
+    # 1. Pase ÚNICO de transparencia alpha para todas las cajas de fondo
+    # (Evita oscurecimientos recursivos accidentales de fotograma)
+    overlay = frame.copy()
+    bg_color = (16, 18, 24)
+    card_bg = (20, 24, 32)
+
+    # Barra Superior
+    cv2.rectangle(overlay, (0, 0), (W, top_h), bg_color, -1)
+    # Tarjeta Top 3
+    cv2.rectangle(overlay, (sidebar_x, pred_y), (sidebar_x + sidebar_w, pred_y + pred_h), card_bg, -1)
+    # Tarjeta Glosario
+    cv2.rectangle(overlay, (sidebar_x, glos_y), (sidebar_x + sidebar_w, glos_y + glos_h), card_bg, -1)
+    # Panel Inferior
+    cv2.rectangle(overlay, (0, bottom_y), (W, H), bg_color, -1)
+
+    # Mezclar fondo con 0.82 de opacidad
     cv2.addWeighted(overlay, 0.82, frame, 0.18, 0, frame)
 
-    cv2.putText(frame, "LSC-RT : NUCLEO ESENCIAL (15 Senas Calibradas)", (18, 36),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.68, (0, 242, 254), 2, cv2.LINE_AA)
+    # Bordes elegantes en tarjetas
+    border_color = (60, 70, 90)
+    cv2.line(frame, (0, top_h), (W, top_h), border_color, 1)
+    cv2.rectangle(frame, (sidebar_x, pred_y), (sidebar_x + sidebar_w, pred_y + pred_h), border_color, 1)
+    cv2.rectangle(frame, (sidebar_x, glos_y), (sidebar_x + sidebar_w, glos_y + glos_h), border_color, 1)
+    cv2.line(frame, (0, bottom_y), (W, bottom_y), border_color, 1)
 
-    # Lateralidad Detectada
-    lat_text = "MODO: 2 MANOS (BIMANUAL)" if is_bimanual else "MODO: 1 MANO (UNIMANUAL)"
-    lat_col = (255, 190, 11) if is_bimanual else (0, 245, 155)
-    cv2.putText(frame, lat_text, (W - 490, 36),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.48, lat_col, 2, cv2.LINE_AA)
+    # --------------------------------------------------------------------------
+    # 2. CONTENIDO BARRA SUPERIOR
+    # --------------------------------------------------------------------------
+    draw_text_shadow(frame, "LSC-RT : NUCLEO ESENCIAL (15 Senas)", (20, 38), 0.70, (0, 242, 254), 2)
+
+    # Pastilla de Modo de Entrada (Manual vs Auto)
+    mode_text = "MODO: MANUAL [ESPACIO]" if is_manual_mode else "MODO: AUTOMATICO"
+    mode_color = (255, 190, 11) if is_manual_mode else (180, 240, 255)
+    draw_text_shadow(frame, mode_text, (W - 550, 38), 0.48, mode_color, 1)
+
+    # Pastilla de Lateralidad
+    lat_text = "2 MANOS (BIMANUAL)" if is_bimanual else "1 MANO (UNIMANUAL)"
+    lat_color = (255, 190, 11) if is_bimanual else (0, 245, 155)
+    draw_text_shadow(frame, lat_text, (W - 350, 38), 0.48, lat_color, 2)
 
     # Estado y FPS
     if is_manual_recording:
-        st_text = "GRABANDO GESTO..."
-        st_col = (0, 245, 155)
+        st_text, st_col = "GRABANDO...", (0, 245, 155)
     elif is_active:
-        st_text = "SIGNANDO..."
-        st_col = (0, 245, 155)
+        st_text, st_col = "SIGNANDO...", (0, 245, 155)
     else:
-        st_text = "REPOSO"
-        st_col = (130, 135, 148)
+        st_text, st_col = "REPOSO", (160, 168, 185)
 
-    cv2.putText(frame, st_text, (W - 220, 36),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.50, st_col, 2, cv2.LINE_AA)
-    cv2.putText(frame, f"{fps:.0f} FPS", (W - 75, 36),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.50, (200, 205, 215), 1, cv2.LINE_AA)
+    draw_text_shadow(frame, st_text, (W - 170, 38), 0.50, st_col, 2)
+    draw_text_shadow(frame, f"{fps:.0f} FPS", (W - 65, 38), 0.48, (220, 225, 235), 1)
 
-    # 2. Barra de Energía Cinética
-    bar_w = 160
-    bar_h = 8
-    bx = 20
-    by = 70
+    # --------------------------------------------------------------------------
+    # 3. BARRA DE ENERGÍA CINÉTICA (Esquina superior izquierda)
+    # --------------------------------------------------------------------------
+    bar_w, bar_h = 180, 10
+    bx, by = 20, top_h + 14
     energy_norm = min(1.0, motion_energy / 0.055)
     fill_len = int(bar_w * energy_norm)
     bar_col = (0, 245, 155) if energy_norm > 0.40 else (140, 145, 155)
     if energy_norm > 0.75:
         bar_col = (0, 242, 254)
 
-    cv2.rectangle(frame, (bx, by), (bx + bar_w, by + bar_h), (35, 38, 48), -1)
-    cv2.rectangle(frame, (bx, by), (bx + fill_len, by + bar_h), bar_col, -1)
-    cv2.putText(frame, "Energia cinetica", (bx + bar_w + 12, by + 8),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.38, (140, 145, 155), 1, cv2.LINE_AA)
+    cv2.rectangle(frame, (bx, by), (bx + bar_w, by + bar_h), (40, 45, 60), -1)
+    if fill_len > 0:
+        cv2.rectangle(frame, (bx, by), (bx + fill_len, by + bar_h), bar_col, -1)
+    cv2.rectangle(frame, (bx, by), (bx + bar_w, by + bar_h), (80, 90, 110), 1)
+    draw_text_shadow(frame, "Energia cinetica", (bx + bar_w + 12, by + 9), 0.42, (200, 205, 220), 1)
 
-    # 3. Panel Lateral Derecho: Top 3 Predicciones y Glosario Core
-    pw = 280
-    px = W - pw - 15
-    py = 72
-
-    cv2.rectangle(overlay, (px, py), (px + pw, py + 140), (14, 16, 22), -1)
-    cv2.addWeighted(overlay, 0.85, frame, 0.15, 0, frame)
-    cv2.rectangle(frame, (px, py), (px + pw, py + 140), (45, 50, 65), 1)
-
-    cv2.putText(frame, "TOP 3 PREDICCIONES", (px + 14, py + 22),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.46, (0, 242, 254), 1, cv2.LINE_AA)
+    # --------------------------------------------------------------------------
+    # 4. TARJETA TOP 3 PREDICCIONES
+    # --------------------------------------------------------------------------
+    draw_text_shadow(frame, "TOP 3 PREDICCIONES", (sidebar_x + 14, pred_y + 24), 0.50, (0, 242, 254), 2)
 
     if top3_preds:
         for r_i, (p_name, p_prob) in enumerate(top3_preds[:3]):
-            row_y = py + 48 + r_i * 30
-            c_badge = (0, 245, 155) if r_i == 0 else (170, 175, 190)
-            cv2.putText(frame, f"{r_i + 1}. {p_name}", (px + 14, row_y),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.46, c_badge, 1, cv2.LINE_AA)
+            row_y = pred_y + 54 + r_i * 32
+            c_badge = (0, 245, 155) if r_i == 0 else (220, 225, 235)
+            draw_text_shadow(frame, f"{r_i + 1}. {p_name}", (sidebar_x + 14, row_y), 0.50, c_badge, 2 if r_i == 0 else 1)
 
             pct_str = f"{p_prob * 100:.1f}%"
-            cv2.putText(frame, pct_str, (px + pw - 60, row_y),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.44, (200, 205, 215), 1, cv2.LINE_AA)
+            draw_text_shadow(frame, pct_str, (sidebar_x + sidebar_w - 68, row_y), 0.46, (255, 255, 255), 1)
 
-            bar_y = row_y + 5
-            max_b = pw - 28
-            fill_b = int(max_b * min(1.0, p_prob))
-            cv2.rectangle(frame, (px + 14, bar_y), (px + 14 + max_b, bar_y + 3), (35, 40, 52), -1)
-            cv2.rectangle(frame, (px + 14, bar_y), (px + 14 + fill_b, bar_y + 3), c_badge, -1)
+            # Barra de progreso
+            p_bar_y = row_y + 6
+            max_b = sidebar_w - 28
+            fill_b = int(max_b * min(1.0, max(0.0, p_prob)))
+            cv2.rectangle(frame, (sidebar_x + 14, p_bar_y), (sidebar_x + 14 + max_b, p_bar_y + 4), (40, 48, 62), -1)
+            if fill_b > 0:
+                cv2.rectangle(frame, (sidebar_x + 14, p_bar_y), (sidebar_x + 14 + fill_b, p_bar_y + 4), c_badge, -1)
     else:
-        cv2.putText(frame, "Esperando seña...", (px + 14, py + 75),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.46, (120, 125, 138), 1, cv2.LINE_AA)
+        draw_text_shadow(frame, "Esperando seña activa...", (sidebar_x + 14, pred_y + 85), 0.48, (160, 168, 185), 1)
 
-    # 4. Glosario de 15 Señas Disponibles
-    gy = py + 155
-    cv2.rectangle(overlay, (px, gy), (px + pw, gy + 195), (14, 16, 22), -1)
-    cv2.addWeighted(overlay, 0.85, frame, 0.15, 0, frame)
-    cv2.rectangle(frame, (px, gy), (px + pw, gy + 195), (45, 50, 65), 1)
+    # --------------------------------------------------------------------------
+    # 5. TARJETA GLOSARIO DE 15 SEÑAS ACTIVAS (Categorizado y legible)
+    # --------------------------------------------------------------------------
+    draw_text_shadow(frame, "GLOSARIO ACTIVO (15 SEÑAS)", (sidebar_x + 14, glos_y + 24), 0.50, (255, 190, 11), 2)
 
-    cv2.putText(frame, "GLOSARIO ACTIVO (15)", (px + 14, gy + 20),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.44, (255, 190, 11), 1, cv2.LINE_AA)
+    # Sección Saludos
+    draw_text_shadow(frame, "SALUDOS:", (sidebar_x + 14, glos_y + 50), 0.42, (0, 242, 254), 1)
+    draw_text_shadow(frame, "• HOLA", (sidebar_x + 14, glos_y + 70), 0.44, (240, 245, 255), 1)
+    draw_text_shadow(frame, "• ADIÓS", (sidebar_x + 14, glos_y + 90), 0.44, (240, 245, 255), 1)
+    draw_text_shadow(frame, "• BUENOS DÍAS", (sidebar_x + 140, glos_y + 70), 0.44, (240, 245, 255), 1)
+    draw_text_shadow(frame, "• BUENAS TARDES", (sidebar_x + 140, glos_y + 90), 0.44, (240, 245, 255), 1)
+    draw_text_shadow(frame, "• BUENAS NOCHES", (sidebar_x + 14, glos_y + 110), 0.44, (240, 245, 255), 1)
 
-    # Columnas del glosario
-    col1 = ["HOLA", "ADIÓS", "GRACIAS", "BUENOS DÍAS", "BUENAS TARDES"]
-    col2 = ["BUENAS NOCHES", "¿CÓMO ESTÁS?", "BIEN", "MAL", "MÁS O MENOS"]
-    col3 = ["POR FAVOR", "CON GUSTO", "PERDÓN", "YO", "TÚ"]
+    # Sección Cortesía
+    draw_text_shadow(frame, "CORTESÍA:", (sidebar_x + 14, glos_y + 138), 0.42, (0, 242, 254), 1)
+    draw_text_shadow(frame, "• GRACIAS", (sidebar_x + 14, glos_y + 158), 0.44, (240, 245, 255), 1)
+    draw_text_shadow(frame, "• POR FAVOR", (sidebar_x + 14, glos_y + 178), 0.44, (240, 245, 255), 1)
+    draw_text_shadow(frame, "• CON GUSTO", (sidebar_x + 140, glos_y + 158), 0.44, (240, 245, 255), 1)
+    draw_text_shadow(frame, "• PERDÓN", (sidebar_x + 140, glos_y + 178), 0.44, (240, 245, 255), 1)
 
-    for i in range(5):
-        cy = gy + 42 + i * 28
-        cv2.putText(frame, f"• {col1[i]}", (px + 12, cy),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, (180, 185, 195), 1, cv2.LINE_AA)
-        cv2.putText(frame, f"• {col2[i]}", (px + 105, cy),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, (180, 185, 195), 1, cv2.LINE_AA)
-        cv2.putText(frame, f"• {col3[i]}", (px + 205, cy),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, (180, 185, 195), 1, cv2.LINE_AA)
+    # Sección Estados y Pronombres
+    draw_text_shadow(frame, "ESTADOS Y PRONOMBRES:", (sidebar_x + 14, glos_y + 206), 0.42, (0, 242, 254), 1)
+    draw_text_shadow(frame, "• BIEN", (sidebar_x + 14, glos_y + 226), 0.44, (240, 245, 255), 1)
+    draw_text_shadow(frame, "• MAL", (sidebar_x + 14, glos_y + 246), 0.44, (240, 245, 255), 1)
+    draw_text_shadow(frame, "• ¿CÓMO ESTÁS?", (sidebar_x + 110, glos_y + 226), 0.44, (240, 245, 255), 1)
+    draw_text_shadow(frame, "• MÁS O MENOS", (sidebar_x + 110, glos_y + 246), 0.44, (240, 245, 255), 1)
+    draw_text_shadow(frame, "• YO", (sidebar_x + 14, glos_y + 266), 0.44, (240, 245, 255), 1)
+    draw_text_shadow(frame, "• TÚ", (sidebar_x + 110, glos_y + 266), 0.44, (240, 245, 255), 1)
 
-    # 5. Panel Inferior: Frase Actual y Frases Anteriores
-    bh = 110
-    by_panel = H - bh
-    cv2.rectangle(overlay, (0, by_panel), (W, H), (10, 12, 16), -1)
-    cv2.addWeighted(overlay, 0.90, frame, 0.10, 0, frame)
-    cv2.line(frame, (0, by_panel), (W, by_panel), (45, 50, 65), 1)
-
-    # Frase Actual
-    cv2.putText(frame, "FRASE ACTUAL:", (20, by_panel + 28),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.48, (0, 242, 254), 1, cv2.LINE_AA)
+    # --------------------------------------------------------------------------
+    # 6. PANEL INFERIOR: FRASE ACTUAL E HISTORIAL
+    # --------------------------------------------------------------------------
+    # Renglón 1: Frase Actual
+    draw_text_shadow(frame, "FRASE ACTUAL:", (20, bottom_y + 32), 0.54, (255, 190, 11), 2)
 
     current_str = " ".join(current_phrase) if current_phrase else "(Realiza una seña para comenzar...)"
-    curr_col = (255, 255, 255) if current_phrase else (110, 115, 128)
-    cv2.putText(frame, current_str, (155, by_panel + 28),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.65, curr_col, 2, cv2.LINE_AA)
+    curr_col = (255, 255, 255) if current_phrase else (160, 168, 185)
+    draw_text_shadow(frame, current_str, (175, bottom_y + 33), 0.72, curr_col, 2)
 
-    # Frases Anteriores (Historial)
-    cv2.putText(frame, "HISTORIAL:", (20, by_panel + 65),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.44, (140, 145, 155), 1, cv2.LINE_AA)
+    # Renglón 2: Historial de frases anteriores
+    draw_text_shadow(frame, "HISTORIAL:", (20, bottom_y + 70), 0.48, (0, 242, 254), 1)
 
     if previous_phrases:
         hist_parts = [f"[{t}] {p}" for t, p in previous_phrases[-3:]]
-        hist_str = "  |  ".join(hist_parts)
+        hist_str = "   |   ".join(hist_parts)
     else:
         hist_str = "Sin frases anteriores registradas."
 
-    cv2.putText(frame, hist_str, (155, by_panel + 65),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.44, (170, 175, 185), 1, cv2.LINE_AA)
+    draw_text_shadow(frame, hist_str, (175, bottom_y + 70), 0.48, (225, 230, 240), 1)
 
-    # Guía de controles
-    cv2.putText(frame, "[ENTER] Guardar frase  |  [C] Borrar actual  |  [B] Deshacer seña  |  [M] Modo Manual  |  [S] Esqueleto  |  [Q] Salir",
-                (20, by_panel + 96), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (120, 125, 138), 1, cv2.LINE_AA)
+    # Renglón 3: Atajos de teclado
+    ctrl_str = "[ENTER] Guardar frase   |   [C] Borrar actual   |   [B] Deshacer seña   |   [M] Modo Manual   |   [S] Esqueleto   |   [Q] Salir"
+    draw_text_shadow(frame, ctrl_str, (20, bottom_y + 106), 0.40, (160, 168, 185), 1)
 
 
 def draw_skeleton_mirrored(frame, pose_11, lh_21, rh_21):
@@ -832,8 +863,8 @@ def main(camera_id=0):
                 print(f">> Frase finalizada (auto): {' '.join(current_phrase)}")
                 current_phrase = []
 
-            # 6. Renderizado
-            disp_frame = cv2.flip(frame, 1)
+            # 6. Renderizado en Alta Resolución (960x720 nativo para nitidez absoluta del HUD)
+            disp_frame = cv2.resize(cv2.flip(frame, 1), (960, 720), interpolation=cv2.INTER_LINEAR)
 
             if show_skeleton:
                 draw_skeleton_mirrored(disp_frame,
