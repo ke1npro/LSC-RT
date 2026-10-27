@@ -54,6 +54,7 @@ app.*.map.json
 /.agents/
 /assets/*.tflite
 /assets/*.task
+/assets/*_backup.json
 /assets/overlays/
 *.py
 !debug_windows/*.py
