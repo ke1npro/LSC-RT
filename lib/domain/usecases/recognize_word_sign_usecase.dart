@@ -8,14 +8,14 @@ import '../entities/sign_prediction.dart';
 /// (tanto bimanuales como unimanuales de alta frecuencia) complementando
 /// la detección estática de letras individuales.
 class RecognizeWordSignUseCase {
-  final List<List<LandmarkPoint>> _leftWristHistory = [];
-  final List<List<LandmarkPoint>> _rightWristHistory = [];
+  final List<double> _dominantWristYHistory = [];
+  final List<double> _dominantMiddleTipYHistory = [];
   final List<double> _bimanualDistHistory = [];
   static const int _historyLimit = 24;
 
   void reset() {
-    _leftWristHistory.clear();
-    _rightWristHistory.clear();
+    _dominantWristYHistory.clear();
+    _dominantMiddleTipYHistory.clear();
     _bimanualDistHistory.clear();
   }
 
@@ -42,11 +42,11 @@ class RecognizeWordSignUseCase {
       dominantHand = rightH;
       secondaryHand = leftH;
 
-      _recordFrame(leftH.wrist, rightH.wrist);
+      _recordFrame(leftH.wrist, rightH.wrist, dominantHand);
     } else {
       dominantHand = validHands.first;
       secondaryHand = null;
-      _recordFrame(null, dominantHand.wrist);
+      _recordFrame(null, dominantHand.wrist, dominantHand);
     }
 
     // Altura del esternón y hombros de referencia
@@ -81,7 +81,11 @@ class RecognizeWordSignUseCase {
     return null;
   }
 
-  void _recordFrame(LandmarkPoint? leftW, LandmarkPoint? rightW) {
+  void _recordFrame(
+    LandmarkPoint? leftW,
+    LandmarkPoint? rightW,
+    HandPose dominantHand,
+  ) {
     if (leftW != null && rightW != null) {
       final dx = rightW.x - leftW.x;
       final dy = rightW.y - leftW.y;
@@ -89,6 +93,17 @@ class RecognizeWordSignUseCase {
       _bimanualDistHistory.add(dist);
       if (_bimanualDistHistory.length > _historyLimit) {
         _bimanualDistHistory.removeAt(0);
+      }
+    }
+
+    if (dominantHand.landmarks.length > 12) {
+      _dominantWristYHistory.add(dominantHand.wrist.y);
+      _dominantMiddleTipYHistory.add(dominantHand.landmarks[12].y);
+      if (_dominantWristYHistory.length > _historyLimit) {
+        _dominantWristYHistory.removeAt(0);
+      }
+      if (_dominantMiddleTipYHistory.length > _historyLimit) {
+        _dominantMiddleTipYHistory.removeAt(0);
       }
     }
   }
@@ -186,13 +201,26 @@ class RecognizeWordSignUseCase {
       }
     }
 
-    // E. GRACIAS: Mano abierta partiendo cerca de la boca/barbilla (y < 0.40)
-    if (geom.isOpen && wrist.y < 0.42 && (wrist.x - 0.5).abs() < 0.18) {
-      return const SignPrediction(label: 'GRACIAS', confidence: 0.92);
+    // E. GRACIAS: Dinámico (descenso desde barbilla/boca al pecho) o Estático en barbilla
+    if (geom.isOpen && (wrist.x - 0.5).abs() < 0.24) {
+      // 1. Detección dinámica de trayectoria descendente (chin-to-chest)
+      if (_dominantWristYHistory.length >= 3) {
+        final yIni = _dominantWristYHistory.take(2).reduce((a, b) => a + b) / 2;
+        final yFin = _dominantWristYHistory.reversed.take(2).reduce((a, b) => a + b) / 2;
+        if (yIni < 0.58 && (yFin - yIni) > 0.03) {
+          return const SignPrediction(label: 'GRACIAS', confidence: 0.95);
+        }
+      }
+
+      // 2. Detección estática con mano abierta en la zona de barbilla o boca
+      final middleTipY = hand.landmarks.length > 12 ? hand.landmarks[12].y : wrist.y;
+      if (wrist.y < 0.58 && middleTipY < 0.52 && (middleTipY <= wrist.y + 0.02)) {
+        return const SignPrediction(label: 'GRACIAS', confidence: 0.93);
+      }
     }
 
-    // F. HOLA: Mano abierta junto a la sien/oreja
-    if (geom.isOpen && wrist.y < 0.35 && (wrist.x - 0.5).abs() > 0.18) {
+    // F. HOLA: Mano abierta junto a la sien/oreja (desplazada lateralmente)
+    if (geom.isOpen && wrist.y < 0.38 && (wrist.x - 0.5).abs() >= 0.20) {
       return const SignPrediction(label: 'HOLA', confidence: 0.90);
     }
 

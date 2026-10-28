@@ -99,6 +99,10 @@ class CameraDataSource {
       desc,
       ResolutionPreset.low,
       enableAudio: false,
+      fps: 24,
+      imageFormatGroup: defaultTargetPlatform == TargetPlatform.android
+          ? ImageFormatGroup.nv21
+          : null,
     );
 
     try {

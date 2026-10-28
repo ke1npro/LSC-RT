@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sign_language_app/domain/entities/hand_pose.dart';
 import 'package:sign_language_app/domain/entities/landmark_point.dart';
+import 'package:sign_language_app/domain/entities/sign_prediction.dart';
 import 'package:sign_language_app/domain/usecases/recognize_word_sign_usecase.dart';
 import 'package:sign_language_app/domain/usecases/resolve_body_pose_usecase.dart';
 
@@ -144,6 +145,66 @@ void main() {
       expect(result, isNotNull);
       expect(result!.label, equals('YO'));
       expect(result.confidence, greaterThanOrEqualTo(0.90));
+    });
+
+    test('RecognizeWordSignUseCase recognizes unimanual GRACIAS statically near chin', () {
+      final useCase = RecognizeWordSignUseCase();
+      // Mano abierta frente a la barbilla: muñeca en y=0.50, dedos extendidos hacia arriba en y=0.38..0.44
+      final landmarks = List.generate(21, (i) {
+        if (i == 0) return const LandmarkPoint(x: 0.50, y: 0.50); // Muñeca
+        if (i == 4) return const LandmarkPoint(x: 0.44, y: 0.42); // Pulgar
+        if (i == 2) return const LandmarkPoint(x: 0.46, y: 0.46);
+        if (i == 8) return const LandmarkPoint(x: 0.49, y: 0.40); // Índice tip
+        if (i == 6) return const LandmarkPoint(x: 0.49, y: 0.45); // Índice PIP
+        if (i == 12) return const LandmarkPoint(x: 0.51, y: 0.38); // Medio tip
+        if (i == 10) return const LandmarkPoint(x: 0.51, y: 0.44); // Medio PIP
+        if (i == 16) return const LandmarkPoint(x: 0.53, y: 0.40); // Anular tip
+        if (i == 14) return const LandmarkPoint(x: 0.53, y: 0.45); // Anular PIP
+        if (i == 20) return const LandmarkPoint(x: 0.55, y: 0.42); // Meñique tip
+        if (i == 18) return const LandmarkPoint(x: 0.55, y: 0.46); // Meñique PIP
+        return const LandmarkPoint(x: 0.50, y: 0.48);
+      });
+
+      final result = useCase.execute(
+        hands: [HandPose(landmarks: landmarks)],
+        pose: null,
+      );
+
+      expect(result, isNotNull);
+      expect(result!.label, equals('GRACIAS'));
+      expect(result.confidence, greaterThanOrEqualTo(0.92));
+    });
+
+    test('RecognizeWordSignUseCase recognizes dynamic GRACIAS trajectory from chin to chest', () {
+      final useCase = RecognizeWordSignUseCase();
+      // Simular 4 frames de descenso de la mano abierta
+      SignPrediction? lastResult;
+      for (int f = 0; f < 4; f++) {
+        final currentY = 0.48 + (f * 0.02); // 0.48 -> 0.54
+        final landmarks = List.generate(21, (i) {
+          if (i == 0) return LandmarkPoint(x: 0.50, y: currentY);
+          if (i == 4) return LandmarkPoint(x: 0.44, y: currentY - 0.08);
+          if (i == 2) return LandmarkPoint(x: 0.46, y: currentY - 0.04);
+          if (i == 8) return LandmarkPoint(x: 0.49, y: currentY - 0.10);
+          if (i == 6) return LandmarkPoint(x: 0.49, y: currentY - 0.05);
+          if (i == 12) return LandmarkPoint(x: 0.51, y: currentY - 0.12);
+          if (i == 10) return LandmarkPoint(x: 0.51, y: currentY - 0.06);
+          if (i == 16) return LandmarkPoint(x: 0.53, y: currentY - 0.10);
+          if (i == 14) return LandmarkPoint(x: 0.53, y: currentY - 0.05);
+          if (i == 20) return LandmarkPoint(x: 0.55, y: currentY - 0.08);
+          if (i == 18) return LandmarkPoint(x: 0.55, y: currentY - 0.04);
+          return LandmarkPoint(x: 0.50, y: currentY - 0.02);
+        });
+
+        lastResult = useCase.execute(
+          hands: [HandPose(landmarks: landmarks)],
+          pose: null,
+        );
+      }
+
+      expect(lastResult, isNotNull);
+      expect(lastResult!.label, equals('GRACIAS'));
+      expect(lastResult.confidence, greaterThanOrEqualTo(0.92));
     });
   });
 }

@@ -286,18 +286,14 @@ class AvatarPosePainter extends CustomPainter {
         ),
     );
 
-    // Flequillo recortado dentro del rostro.
-    canvas.save();
-    canvas.clipPath(Path()..addOval(face));
+    // Flequillo ilustrado sin canvas.clipPath (evita capas intermedias en GPU)
     final fringe = Path()
-      ..moveTo(-w * 0.6, -h * 0.6)
-      ..lineTo(w * 0.6, -h * 0.6)
-      ..lineTo(w * 0.6, -h * 0.12)
+      ..moveTo(-w * 0.48, -h * 0.10)
+      ..quadraticBezierTo(0, -h * 0.58, w * 0.48, -h * 0.12)
       ..quadraticBezierTo(w * 0.25, -h * 0.30, w * 0.05, -h * 0.20)
-      ..quadraticBezierTo(-w * 0.25, -h * 0.34, -w * 0.6, -h * 0.10)
+      ..quadraticBezierTo(-w * 0.25, -h * 0.34, -w * 0.48, -h * 0.10)
       ..close();
     canvas.drawPath(fringe, Paint()..color = theme.hairColor);
-    canvas.restore();
     canvas.drawOval(face, outline);
 
     // Ojos con parpadeo periódico.
@@ -397,14 +393,21 @@ class AvatarPosePainter extends CustomPainter {
     final fw = (palmLen * 0.32).clamp(_s * 0.025, _s * 0.075);
     final palmCenter = (p[0] + p[5] + p[17]) / 3;
 
-    // Halo de identidad (izquierda / derecha).
+    // Halo de identidad (izquierda / derecha) acelerado por GPU vía gradiente radial nativo.
     if (theme.glowSigma > 0) {
+      final glowRadius = math.max(palmLen * 1.5, _s * 0.18);
       canvas.drawCircle(
         palmCenter,
-        math.max(palmLen * 1.5, _s * 0.18),
+        glowRadius,
         Paint()
-          ..color = identity.withValues(alpha: 0.38)
-          ..maskFilter = ui.MaskFilter.blur(BlurStyle.normal, theme.glowSigma),
+          ..shader = ui.Gradient.radial(
+            palmCenter,
+            glowRadius,
+            [
+              identity.withValues(alpha: 0.32),
+              identity.withValues(alpha: 0.0),
+            ],
+          ),
       );
     }
 

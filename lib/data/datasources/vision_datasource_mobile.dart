@@ -17,6 +17,8 @@ class PlatformVisionDataSource implements VisionDataSource {
   final _faceController = StreamController<List<FaceBounds>>.broadcast();
 
   StreamSubscription? _rawHandSub;
+  bool _isProcessingHand = false;
+  DateTime _lastHandTime = DateTime.fromMillisecondsSinceEpoch(0);
   bool _isProcessingFace = false;
   int _frameCounter = 0;
   bool _initialized = false;
@@ -68,6 +70,7 @@ class PlatformVisionDataSource implements VisionDataSource {
       );
 
       _rawHandSub = _handLandmarkerPlugin?.landmarkStream.listen((rawHands) {
+        _isProcessingHand = false;
         final detected = rawHands.map((h) {
           final landmarks = h.landmarks.map((lm) {
             final rawPoint = LandmarkPoint(x: lm.x, y: lm.y, z: lm.z);
@@ -97,15 +100,27 @@ class PlatformVisionDataSource implements VisionDataSource {
     if (!_initialized || _handLandmarkerPlugin == null) return;
     _frameCounter++;
 
-    // 1. Detección de mano (1 de cada 2 cuadros)
-    if (_frameCounter % 2 == 0) {
+    final now = DateTime.now();
+
+    // 1. Control de contrapresión (Backpressure): si MediaPipe está ocupado procesando
+    // el fotograma previo, descartar el fotograma actual para no saturar memoria JNI.
+    // Timeout de seguridad de 100ms por si un fotograma no retorna detección.
+    final bool canProcessHand = !_isProcessingHand ||
+        now.difference(_lastHandTime).inMilliseconds > 100;
+
+    if (canProcessHand) {
+      _isProcessingHand = true;
+      _lastHandTime = now;
       try {
         _handLandmarkerPlugin!.processFrame(image, sensorOrientation);
-      } catch (_) {}
+      } catch (_) {
+        _isProcessingHand = false;
+      }
     }
 
-    // 2. Detección facial preliminar (1 de cada 8 cuadros)
-    if (_frameCounter % 8 == 0 && !_isProcessingFace && _faceDetector != null) {
+    // 2. Detección facial liviana a baja frecuencia (1 de cada 60 fotogramas)
+    // para no competir con los recursos de CPU/GPU del detector de señas.
+    if (_frameCounter % 60 == 0 && !_isProcessingFace && _faceDetector != null) {
       _isProcessingFace = true;
       _processFaceFrame(image, sensorOrientation).whenComplete(() {
         _isProcessingFace = false;

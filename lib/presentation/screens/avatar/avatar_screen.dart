@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
@@ -15,6 +16,8 @@ class AvatarScreen extends StatefulWidget {
 
 class _AvatarScreenState extends State<AvatarScreen> {
   final TextEditingController _searchController = TextEditingController();
+  String? _toastMessage;
+  Timer? _toastTimer;
 
   @override
   void initState() {
@@ -27,8 +30,23 @@ class _AvatarScreenState extends State<AvatarScreen> {
     });
   }
 
+  void _showAddedToast(String signName) {
+    _toastTimer?.cancel();
+    setState(() {
+      _toastMessage = "Seña '$signName' añadida";
+    });
+    _toastTimer = Timer(const Duration(milliseconds: 2200), () {
+      if (mounted) {
+        setState(() {
+          _toastMessage = null;
+        });
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _toastTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -72,6 +90,85 @@ class _AvatarScreenState extends State<AvatarScreen> {
             child: GlassTopBar(
               title: 'Avatar LSC',
               subtitle: 'Texto a Señas en Tiempo Real',
+            ),
+          ),
+
+          // Popup Flotante de confirmación ("Seña '...' añadida")
+          Positioned(
+            bottom: bottomPadding + 20,
+            left: 20,
+            right: 20,
+            child: IgnorePointer(
+              ignoring: _toastMessage == null,
+              child: AnimatedOpacity(
+                opacity: _toastMessage != null ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                child: AnimatedSlide(
+                  offset: _toastMessage != null
+                      ? Offset.zero
+                      : const Offset(0, 0.45),
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xF2121727),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: AppColors.cyanAccent.withValues(alpha: 0.6),
+                          width: 1.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.cyanAccent.withValues(alpha: 0.25),
+                            blurRadius: 16,
+                            spreadRadius: 2,
+                            offset: const Offset(0, 4),
+                          ),
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            blurRadius: 20,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: AppColors.mintGreen.withValues(alpha: 0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.check_circle_rounded,
+                              color: AppColors.mintGreen,
+                              size: 16,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Flexible(
+                            child: Text(
+                              _toastMessage ?? '',
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.2,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -234,24 +331,54 @@ class _AvatarScreenState extends State<AvatarScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Buscador
+        // Encabezado visual para destacar el buscador
+        const Row(
+          children: [
+            Icon(Icons.search_rounded, color: AppColors.cyanAccent, size: 16),
+            SizedBox(width: 8),
+            Text(
+              'BUSCADOR DE SEÑAS',
+              style: TextStyle(
+                color: AppColors.cyanAccent,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // Buscador destacado
         Container(
-          height: 44,
+          height: 48,
           decoration: BoxDecoration(
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.glassBorder),
+            border: Border.all(
+              color: _searchController.text.isNotEmpty
+                  ? AppColors.cyanAccent.withValues(alpha: 0.6)
+                  : AppColors.glassBorder,
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: TextField(
             controller: _searchController,
             onChanged: (val) => viewModel.setSearchQuery(val),
             style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
             decoration: InputDecoration(
-              hintText: 'Buscar seña por nombre...',
+              hintText: 'Buscar seña por palabra (ej. Buenos días, Gracias...)',
               hintStyle:
-                  const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  const TextStyle(color: AppColors.textMuted, fontSize: 12),
               prefixIcon: const Icon(Icons.search_rounded,
-                  color: AppColors.textSecondary, size: 20),
+                  color: AppColors.cyanAccent, size: 20),
               suffixIcon: _searchController.text.isNotEmpty
                   ? IconButton(
                       icon: const Icon(Icons.clear_rounded,
@@ -263,7 +390,7 @@ class _AvatarScreenState extends State<AvatarScreen> {
                     )
                   : null,
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
             ),
           ),
         ),
@@ -364,7 +491,10 @@ class _AvatarScreenState extends State<AvatarScreen> {
     final isBimanual = sign.isBimanual;
 
     return InkWell(
-      onTap: () => viewModel.addWordToSentence(sign),
+      onTap: () {
+        viewModel.addWordToSentence(sign);
+        _showAddedToast(sign.displayName);
+      },
       borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

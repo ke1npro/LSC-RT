@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/avatar_theme.dart';
@@ -34,9 +33,7 @@ class AvatarPlaybackDialog extends StatelessWidget {
           insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(28),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-              child: Container(
+            child: Container(
                 constraints: const BoxConstraints(maxWidth: 480, maxHeight: 680),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceGlass,
@@ -376,7 +373,6 @@ class AvatarPlaybackDialog extends StatelessWidget {
                   ],
                 ),
               ),
-            ),
           ),
         );
       },
