@@ -29,6 +29,9 @@ class PlatformVisionDataSource implements VisionDataSource {
   void setFaceDetectionEnabled(bool enabled) {}
 
   @override
+  void setUseGpu(bool useGpu) {}
+
+  @override
   Future<void> dispose() async {
     await _handController.close();
     await _faceController.close();

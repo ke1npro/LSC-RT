@@ -10,5 +10,6 @@ abstract class IVisionRepository {
   void processFrame(dynamic image, int sensorOrientation);
   void setRotation(int degrees);
   void setFaceDetectionEnabled(bool enabled);
+  void setUseGpu(bool useGpu);
   Future<void> dispose();
 }

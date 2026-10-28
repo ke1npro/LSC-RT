@@ -55,7 +55,9 @@ class CameraViewport extends StatelessWidget {
           });
         }
 
-        Widget preview = CameraPreview(controller!);
+        Widget preview = RepaintBoundary(
+          child: CameraPreview(controller!),
+        );
 
         // En Web/PC, reflejar la cámara frontal horizontalmente como un espejo
         if (kIsWeb && isFrontCamera) {

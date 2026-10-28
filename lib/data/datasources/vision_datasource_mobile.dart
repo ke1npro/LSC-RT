@@ -25,6 +25,7 @@ class PlatformVisionDataSource implements VisionDataSource {
 
   int _rotationDegrees = 270; // Por defecto 270° para orientación vertical correcta sin inversión (dedos arriba)
   bool _faceDetectionEnabled = false;
+  bool _useGpu = false;
 
   static LandmarkPoint rotateLandmark(LandmarkPoint lm, int degrees) {
     final deg = (degrees % 360 + 360) % 360;
@@ -62,17 +63,25 @@ class PlatformVisionDataSource implements VisionDataSource {
   }
 
   @override
-  Future<void> initialize() async {
-    if (!Platform.isAndroid) {
-      _initialized = true;
-      return;
+  void setUseGpu(bool useGpu) {
+    if (_useGpu == useGpu) return;
+    _useGpu = useGpu;
+    if (_initialized && Platform.isAndroid) {
+      _setupHandLandmarker();
     }
+  }
 
+  void _setupHandLandmarker() {
     try {
+      _rawHandSub?.cancel();
+      _rawHandSub = null;
+      _handLandmarkerPlugin?.dispose();
+      _handLandmarkerPlugin = null;
+
       _handLandmarkerPlugin = HandLandmarkerPlugin.create(
         numHands: 2,
         minHandDetectionConfidence: 0.45,
-        delegate: HandLandmarkerDelegate.gpu,
+        delegate: _useGpu ? HandLandmarkerDelegate.gpu : HandLandmarkerDelegate.cpu,
       );
 
       _rawHandSub = _handLandmarkerPlugin?.landmarkStream.listen((rawHands) {
@@ -86,7 +95,21 @@ class PlatformVisionDataSource implements VisionDataSource {
         }).toList();
         _handController.add(detected);
       });
+    } catch (e) {
+      debugPrint('Aviso: Error configurando HandLandmarker con delegate (${_useGpu ? "GPU" : "CPU"}): $e');
+    }
+  }
 
+  @override
+  Future<void> initialize() async {
+    if (!Platform.isAndroid) {
+      _initialized = true;
+      return;
+    }
+
+    _setupHandLandmarker();
+
+    try {
       _faceDetector = FaceDetector(
         options: FaceDetectorOptions(
           performanceMode: FaceDetectorMode.fast,
@@ -94,7 +117,7 @@ class PlatformVisionDataSource implements VisionDataSource {
         ),
       );
     } catch (e) {
-      debugPrint('Aviso: Plugins nativos no disponibles en este host: $e');
+      debugPrint('Aviso: FaceDetector no disponible: $e');
     }
 
     _initialized = true;
@@ -111,9 +134,9 @@ class PlatformVisionDataSource implements VisionDataSource {
     // 1. Control de contrapresión estricto (Zero-Drop Lock):
     // Si MediaPipe está ocupado procesando el fotograma previo, descartar el actual
     // para no saturar memoria JNI ni la CPU de Android.
-    // Timeout de seguridad amplio (450ms) solo en caso de frame perdido.
+    // Timeout de recuperación rápida (120ms) solo en caso de fotograma perdido.
     final bool canProcessHand = !_isProcessingHand ||
-        now.difference(_lastHandTime).inMilliseconds > 450;
+        now.difference(_lastHandTime).inMilliseconds > 120;
 
     if (canProcessHand && image.planes.length >= 3) {
       _isProcessingHand = true;

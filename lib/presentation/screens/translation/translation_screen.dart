@@ -1,6 +1,9 @@
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../domain/entities/body_pose.dart';
+import '../../../domain/entities/sign_prediction.dart';
 import '../../viewmodels/settings_viewmodel.dart';
 import '../../viewmodels/translation_viewmodel.dart';
 import '../../widgets/camera_viewport.dart';
@@ -29,8 +32,13 @@ class _TranslationScreenState extends State<TranslationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final translationVm = context.watch<TranslationViewModel>();
-    final settingsVm = context.watch<SettingsViewModel>();
+    final translationVm = context.read<TranslationViewModel>();
+    final isInitialized = context.select<TranslationViewModel, bool>((vm) => vm.isInitialized);
+    final isSwitching = context.select<TranslationViewModel, bool>((vm) => vm.isCameraSwitching);
+    final isPermissionDenied = context.select<TranslationViewModel, bool>((vm) => vm.isCameraPermissionDenied);
+    final controller = context.select<TranslationViewModel, CameraController?>((vm) => vm.cameraDataSource.controller);
+    final isFrontCamera = context.select<TranslationViewModel, bool>((vm) => vm.isFrontCamera);
+    final errorMessage = context.select<TranslationViewModel, String?>((vm) => vm.cameraErrorMessage);
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -41,23 +49,28 @@ class _TranslationScreenState extends State<TranslationScreen> {
           // 1. Visor de Cámara con BodyPosePainter reactivo aislado
           RepaintBoundary(
             child: CameraViewport(
-              controller: translationVm.cameraDataSource.controller,
-              isFrontCamera: translationVm.isFrontCamera,
-              isSwitching: translationVm.isCameraSwitching,
-              isPermissionDenied: translationVm.isCameraPermissionDenied,
-              errorMessage: translationVm.cameraErrorMessage,
+              controller: controller,
+              isFrontCamera: isFrontCamera,
+              isSwitching: isSwitching,
+              isPermissionDenied: isPermissionDenied,
+              errorMessage: errorMessage,
               onRetry: () => translationVm.retryCamera(),
               onSizeChanged: (size) => translationVm.setViewportSize(size),
-              overlay: RepaintBoundary(
-                child: CustomPaint(
-                  size: Size.infinite,
-                  painter: BodyPosePainter(
-                    pose: translationVm.currentPose,
-                    showOverlay: settingsVm.showMediaPipeOverlay,
-                    showFace: settingsVm.showFaceDetection,
-                    isMirrored: translationVm.isFrontCamera,
-                  ),
-                ),
+              overlay: Selector<TranslationViewModel, BodyPose?>(
+                selector: (_, vm) => vm.currentPose,
+                builder: (context, currentPose, _) {
+                  return RepaintBoundary(
+                    child: CustomPaint(
+                      size: Size.infinite,
+                      painter: BodyPosePainter(
+                        pose: currentPose,
+                        showOverlay: context.select<SettingsViewModel, bool>((s) => s.showMediaPipeOverlay),
+                        showFace: context.select<SettingsViewModel, bool>((s) => s.showFaceDetection),
+                        isMirrored: isFrontCamera,
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -70,7 +83,7 @@ class _TranslationScreenState extends State<TranslationScreen> {
             child: GlassTopBar(
               title: 'LSC RT',
               subtitle: 'Traducción en Tiempo Real',
-              isOnline: translationVm.isInitialized,
+              isOnline: isInitialized,
               onSwitchCamera: () => translationVm.switchCamera(),
             ),
           ),
@@ -80,30 +93,39 @@ class _TranslationScreenState extends State<TranslationScreen> {
             bottom: 0,
             left: 0,
             right: 0,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding + 12),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Historial de las últimas 5 palabras reconocidas
-                      if (translationVm.recentWords.isNotEmpty) ...[
-                        _buildRecentWordsRibbon(translationVm),
-                        const SizedBox(height: 10),
-                      ],
+            child: Selector<TranslationViewModel, (SignPrediction?, bool, List<String>)>(
+              selector: (_, vm) => (vm.currentPrediction, vm.hasHand, vm.recentWords),
+              builder: (context, data, _) {
+                final prediction = data.$1;
+                final hasHand = data.$2;
+                final recentWords = data.$3;
 
-                      // Pastilla principal de resultado
-                      GlassResultPill(
-                        prediction: translationVm.currentPrediction,
-                        hasHand: translationVm.hasHand,
-                        isCalibrationAvailable: false,
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding + 12),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Historial de las últimas 5 palabras reconocidas
+                          if (recentWords.isNotEmpty) ...[
+                            _buildRecentWordsRibbon(recentWords),
+                            const SizedBox(height: 10),
+                          ],
+
+                          // Pastilla principal de resultado
+                          GlassResultPill(
+                            prediction: prediction,
+                            hasHand: hasHand,
+                            isCalibrationAvailable: false,
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
         ],
@@ -111,7 +133,7 @@ class _TranslationScreenState extends State<TranslationScreen> {
     );
   }
 
-  Widget _buildRecentWordsRibbon(TranslationViewModel vm) {
+  Widget _buildRecentWordsRibbon(List<String> recentWords) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
@@ -127,26 +149,26 @@ class _TranslationScreenState extends State<TranslationScreen> {
         ],
       ),
       child: Row(
-            children: [
-              const Icon(Icons.history_rounded,
-                  color: AppColors.cyanAccent, size: 16),
-              const SizedBox(width: 8),
-              const Text(
-                'Últimas:',
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: List.generate(vm.recentWords.length, (idx) {
-                      final word = vm.recentWords[idx];
-                      final isLast = idx == vm.recentWords.length - 1;
+        children: [
+          const Icon(Icons.history_rounded,
+              color: AppColors.cyanAccent, size: 16),
+          const SizedBox(width: 8),
+          const Text(
+            'Últimas:',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: List.generate(recentWords.length, (idx) {
+                  final word = recentWords[idx];
+                  final isLast = idx == recentWords.length - 1;
                       return Padding(
                         padding: const EdgeInsets.only(right: 6),
                         child: Container(
@@ -186,7 +208,8 @@ class _TranslationScreenState extends State<TranslationScreen> {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 tooltip: 'Limpiar historial',
-                onPressed: () => vm.clearRecentWords(),
+                onPressed: () =>
+                    context.read<TranslationViewModel>().clearRecentWords(),
               ),
             ],
           ),

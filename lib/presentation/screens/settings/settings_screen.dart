@@ -75,6 +75,35 @@ class SettingsScreen extends StatelessWidget {
 
                 const SizedBox(height: 28),
 
+                // SECCIÓN 2: RENDIMIENTO Y MOTOR DE VISIÓN
+                _buildSectionHeader('RENDIMIENTO Y MOTOR DE VISIÓN'),
+                const SizedBox(height: 10),
+                _buildCard([
+                  _buildSwitchTile(
+                    icon: Icons.speed_rounded,
+                    iconColor: AppColors.mintGreen,
+                    title: 'Modo Alto Rendimiento (Baja Resolución)',
+                    subtitle:
+                        'Reduce la resolución de la cámara para que MediaPipe procese a 25-30 FPS fluidos.',
+                    value: settingsVm.highPerformanceCamera,
+                    onChanged: (val) =>
+                        settingsVm.setHighPerformanceCamera(val),
+                  ),
+                  const Divider(height: 1, color: AppColors.glassBorder),
+                  _buildSwitchTile(
+                    icon: Icons.memory_rounded,
+                    iconColor: AppColors.cyanAccent,
+                    title: 'Acelerador GPU para MediaPipe',
+                    subtitle:
+                        'Alterna entre aceleración GPU y CPU XNNPACK (recomendado desactivado en gama media/baja).',
+                    value: settingsVm.useGpuDelegate,
+                    onChanged: (val) =>
+                        settingsVm.setUseGpuDelegate(val),
+                  ),
+                ]),
+
+                const SizedBox(height: 28),
+
                 // SECCIÓN 2: GESTIÓN DE DATASET Y RESTAURACIÓN DE FÁBRICA
                 _buildSectionHeader('GESTIÓN DE DATASET Y OVERRIDES'),
                 const SizedBox(height: 10),

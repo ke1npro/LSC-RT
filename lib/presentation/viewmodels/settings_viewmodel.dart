@@ -19,6 +19,8 @@ class SettingsViewModel extends ChangeNotifier {
   bool get showTeachingMediaPipeOverlay =>
       _settingsRepository.showTeachingMediaPipeOverlay;
   int get modelRotationDegrees => _settingsRepository.modelRotationDegrees;
+  bool get useGpuDelegate => _settingsRepository.useGpuDelegate;
+  bool get highPerformanceCamera => _settingsRepository.highPerformanceCamera;
 
   // Estado del Dataset y Overrides
   int get factorySignsCount => _signRepository.factorySignsCount;
@@ -30,6 +32,7 @@ class SettingsViewModel extends ChangeNotifier {
     await _signRepository.initialize();
     _visionRepository?.setFaceDetectionEnabled(_settingsRepository.showFaceDetection);
     _visionRepository?.setRotation(_settingsRepository.modelRotationDegrees);
+    _visionRepository?.setUseGpu(_settingsRepository.useGpuDelegate);
     notifyListeners();
   }
 
@@ -52,6 +55,17 @@ class SettingsViewModel extends ChangeNotifier {
   Future<void> setModelRotationDegrees(int value) async {
     await _settingsRepository.setModelRotationDegrees(value);
     _visionRepository?.setRotation(value);
+    notifyListeners();
+  }
+
+  Future<void> setUseGpuDelegate(bool value) async {
+    await _settingsRepository.setUseGpuDelegate(value);
+    _visionRepository?.setUseGpu(value);
+    notifyListeners();
+  }
+
+  Future<void> setHighPerformanceCamera(bool value) async {
+    await _settingsRepository.setHighPerformanceCamera(value);
     notifyListeners();
   }
 

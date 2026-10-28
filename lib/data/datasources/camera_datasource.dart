@@ -10,6 +10,7 @@ class CameraDataSource {
   bool _isSwitching = false;
   bool _isPermissionDenied = false;
   String? _errorMessage;
+  ResolutionPreset _resolutionPreset = ResolutionPreset.low;
 
   CameraDataSource(List<CameraDescription> cameras) : _cameras = List.from(cameras) {
     if (_cameras.isNotEmpty) {
@@ -33,6 +34,11 @@ class CameraDataSource {
   bool get isSwitching => _isSwitching;
   bool get isPermissionDenied => _isPermissionDenied;
   String? get errorMessage => _errorMessage;
+  ResolutionPreset get resolutionPreset => _resolutionPreset;
+
+  void setResolutionPreset(ResolutionPreset preset) {
+    _resolutionPreset = preset;
+  }
 
   CameraDescription? get currentCamera =>
       _cameras.isNotEmpty && _selectedCameraIndex < _cameras.length
@@ -97,8 +103,9 @@ class CameraDataSource {
     final desc = _cameras[_selectedCameraIndex];
     final newController = CameraController(
       desc,
-      ResolutionPreset.medium,
+      _resolutionPreset,
       enableAudio: false,
+      fps: 30,
       imageFormatGroup: ImageFormatGroup.yuv420,
     );
 

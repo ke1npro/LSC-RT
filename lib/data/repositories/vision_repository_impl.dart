@@ -33,5 +33,9 @@ class VisionRepositoryImpl implements IVisionRepository {
       _dataSource.setFaceDetectionEnabled(enabled);
 
   @override
+  void setUseGpu(bool useGpu) =>
+      _dataSource.setUseGpu(useGpu);
+
+  @override
   Future<void> dispose() => _dataSource.dispose();
 }
