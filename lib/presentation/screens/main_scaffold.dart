@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import 'avatar/avatar_screen.dart';
@@ -31,46 +30,41 @@ class _MainScaffoldState extends State<MainScaffold> {
         index: _currentIndex,
         children: _screens,
       ),
-      bottomNavigationBar: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Container(
-            decoration: const BoxDecoration(
-              color: AppColors.surfaceGlass,
-              border: Border(
-                top: BorderSide(color: AppColors.glassBorder),
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xF2121727),
+          border: Border(
+            top: BorderSide(color: AppColors.glassBorder),
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: NavigationBar(
+            selectedIndex: _currentIndex,
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            onDestinationSelected: (index) {
+              setState(() => _currentIndex = index);
+            },
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.translate_rounded),
+                label: 'Traducción',
               ),
-            ),
-            child: SafeArea(
-              top: false,
-              child: NavigationBar(
-                selectedIndex: _currentIndex,
-                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-                onDestinationSelected: (index) {
-                  setState(() => _currentIndex = index);
-                },
-                destinations: const [
-                  NavigationDestination(
-                    icon: Icon(Icons.translate_rounded),
-                    label: 'Traducción',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.accessibility_new_rounded),
-                    label: 'Avatar',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.school_outlined),
-                    selectedIcon: Icon(Icons.school_rounded),
-                    label: 'Enseñanza',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.settings_outlined),
-                    selectedIcon: Icon(Icons.settings_rounded),
-                    label: 'Configuración',
-                  ),
-                ],
+              NavigationDestination(
+                icon: Icon(Icons.accessibility_new_rounded),
+                label: 'Avatar',
               ),
-            ),
+              NavigationDestination(
+                icon: Icon(Icons.school_outlined),
+                selectedIcon: Icon(Icons.school_rounded),
+                label: 'Enseñanza',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.settings_outlined),
+                selectedIcon: Icon(Icons.settings_rounded),
+                label: 'Configuración',
+              ),
+            ],
           ),
         ),
       ),

@@ -75,6 +75,9 @@ class PlatformVisionDataSource implements VisionDataSource {
   void setRotation(int degrees) {}
 
   @override
+  void setFaceDetectionEnabled(bool enabled) {}
+
+  @override
   Future<void> dispose() async {
     _initialized = false;
     await _handSub?.cancel();

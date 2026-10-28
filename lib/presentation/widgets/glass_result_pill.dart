@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../domain/entities/sign_prediction.dart';
@@ -17,18 +16,21 @@ class GlassResultPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceGlass,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.glassBorder),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xF2121727),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.glassBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 4),
           ),
-          child: Row(
+        ],
+      ),
+      child: Row(
             children: [
               // Letra o palabra reconocida
               Container(
@@ -151,8 +153,6 @@ class GlassResultPill extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
+        );
   }
 }

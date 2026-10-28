@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 
@@ -26,18 +25,21 @@ class GlassTopBar extends StatelessWidget {
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, topPadding + 8, 16, 0),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceGlass,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.glassBorder),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xF2121727),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.glassBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.35),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
             ),
-            child: Row(
+          ],
+        ),
+        child: Row(
               children: [
                 if (leadingAction != null) ...[
                   leadingAction!,
@@ -111,8 +113,6 @@ class GlassTopBar extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
     );
   }
 }

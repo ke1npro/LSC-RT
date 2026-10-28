@@ -91,6 +91,7 @@ class TranslationViewModel extends ChangeNotifier {
     await visionRepository.initialize();
     await ttsService?.initialize();
     visionRepository.setRotation(settingsRepository?.modelRotationDegrees ?? 270);
+    visionRepository.setFaceDetectionEnabled(settingsRepository?.showFaceDetection ?? false);
 
     await _handSubscription?.cancel();
     _handSubscription = visionRepository.handStream.listen(_onHandsDetected);

@@ -26,6 +26,9 @@ class PlatformVisionDataSource implements VisionDataSource {
   void setRotation(int degrees) {}
 
   @override
+  void setFaceDetectionEnabled(bool enabled) {}
+
+  @override
   Future<void> dispose() async {
     await _handController.close();
     await _faceController.close();

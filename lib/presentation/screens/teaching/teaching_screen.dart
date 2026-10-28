@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
@@ -571,47 +570,48 @@ class _TeachingScreenState extends State<TeachingScreen> {
           Positioned(
             top: 86,
             right: 16,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  width: 110,
-                  height: 140,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0A0F1D).withValues(alpha: 0.85),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: AppColors.cyanAccent.withValues(alpha: 0.5),
-                      width: 1.5,
+            child: Container(
+              width: 110,
+              height: 140,
+              decoration: BoxDecoration(
+                color: const Color(0xF20A0F1D),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppColors.cyanAccent.withValues(alpha: 0.5),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Stack(
+                children: [
+                  CustomPaint(
+                    size: Size.infinite,
+                    painter: AvatarPosePainter(
+                      frame: vm.currentDemoFrame,
+                      theme: const AvatarTheme(showBackdrop: false),
                     ),
                   ),
-                  child: Stack(
-                    children: [
-                      CustomPaint(
-                        size: Size.infinite,
-                        painter: AvatarPosePainter(
-                          frame: vm.currentDemoFrame,
-                          theme: const AvatarTheme(showBackdrop: false),
-                        ),
+                  Positioned(
+                    bottom: 4,
+                    left: 0,
+                    right: 0,
+                    child: Text(
+                      'Guía: ${sign?.displayName ?? ""}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: AppColors.cyanAccent,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
                       ),
-                      Positioned(
-                        bottom: 4,
-                        left: 0,
-                        right: 0,
-                        child: Text(
-                          'Guía: ${sign?.displayName ?? ""}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: AppColors.cyanAccent,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
@@ -644,19 +644,22 @@ class _TeachingScreenState extends State<TeachingScreen> {
                 constraints: const BoxConstraints(maxWidth: 500),
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(20, 0, 20, bottomPadding + 16),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(24),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 14),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceGlass,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: AppColors.glassBorder),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xF2121727),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: AppColors.glassBorder),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          blurRadius: 18,
+                          offset: const Offset(0, 4),
                         ),
-                        child: Row(
+                      ],
+                    ),
+                    child: Row(
                           children: [
                             // Medidor circular de coincidencia
                             Container(
@@ -736,8 +739,6 @@ class _TeachingScreenState extends State<TeachingScreen> {
                           ],
                         ),
                       ),
-                    ),
-                  ),
                 ),
               ),
             ),

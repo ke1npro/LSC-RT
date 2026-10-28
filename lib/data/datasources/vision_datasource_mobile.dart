@@ -24,6 +24,7 @@ class PlatformVisionDataSource implements VisionDataSource {
   bool _initialized = false;
 
   int _rotationDegrees = 270; // Por defecto 270° para orientación vertical correcta sin inversión (dedos arriba)
+  bool _faceDetectionEnabled = false;
 
   static LandmarkPoint rotateLandmark(LandmarkPoint lm, int degrees) {
     final deg = (degrees % 360 + 360) % 360;
@@ -53,6 +54,11 @@ class PlatformVisionDataSource implements VisionDataSource {
   @override
   void setRotation(int degrees) {
     _rotationDegrees = (degrees % 360 + 360) % 360;
+  }
+
+  @override
+  void setFaceDetectionEnabled(bool enabled) {
+    _faceDetectionEnabled = enabled;
   }
 
   @override
@@ -102,10 +108,12 @@ class PlatformVisionDataSource implements VisionDataSource {
 
     final now = DateTime.now();
 
-    // 1. Control de contrapresión (Backpressure): si MediaPipe está ocupado procesando
-    // el fotograma previo, descartar el fotograma actual para no saturar memoria JNI.
+    // 1. Control de contrapresión estricto (Zero-Drop Lock):
+    // Si MediaPipe está ocupado procesando el fotograma previo, descartar el actual
+    // para no saturar memoria JNI ni la CPU de Android.
+    // Timeout de seguridad amplio (450ms) solo en caso de frame perdido.
     final bool canProcessHand = !_isProcessingHand ||
-        now.difference(_lastHandTime).inMilliseconds > 50;
+        now.difference(_lastHandTime).inMilliseconds > 450;
 
     if (canProcessHand && image.planes.length >= 3) {
       _isProcessingHand = true;
@@ -119,8 +127,11 @@ class PlatformVisionDataSource implements VisionDataSource {
     }
 
     // 2. Detección facial liviana a baja frecuencia (1 de cada 60 fotogramas)
-    // para no competir con los recursos de CPU/GPU del detector de señas.
-    if (_frameCounter % 60 == 0 && !_isProcessingFace && _faceDetector != null) {
+    // ÚNICAMENTE si el usuario activó la detección facial en ajustes.
+    if (_faceDetectionEnabled &&
+        _frameCounter % 60 == 0 &&
+        !_isProcessingFace &&
+        _faceDetector != null) {
       _isProcessingFace = true;
       _processFaceFrame(image, sensorOrientation).whenComplete(() {
         _isProcessingFace = false;

@@ -29,5 +29,9 @@ class VisionRepositoryImpl implements IVisionRepository {
   void setRotation(int degrees) => _dataSource.setRotation(degrees);
 
   @override
+  void setFaceDetectionEnabled(bool enabled) =>
+      _dataSource.setFaceDetectionEnabled(enabled);
+
+  @override
   Future<void> dispose() => _dataSource.dispose();
 }

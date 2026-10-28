@@ -1,12 +1,18 @@
 import 'package:flutter/foundation.dart';
 import '../../domain/repositories/i_settings_repository.dart';
 import '../../domain/repositories/i_sign_repository.dart';
+import '../../domain/repositories/i_vision_repository.dart';
 
 class SettingsViewModel extends ChangeNotifier {
   final ISettingsRepository _settingsRepository;
   final ISignRepository _signRepository;
+  final IVisionRepository? _visionRepository;
 
-  SettingsViewModel(this._settingsRepository, this._signRepository);
+  SettingsViewModel(
+    this._settingsRepository,
+    this._signRepository, [
+    this._visionRepository,
+  ]);
 
   bool get showMediaPipeOverlay => _settingsRepository.showMediaPipeOverlay;
   bool get showFaceDetection => _settingsRepository.showFaceDetection;
@@ -22,6 +28,8 @@ class SettingsViewModel extends ChangeNotifier {
   Future<void> initialize() async {
     await _settingsRepository.initialize();
     await _signRepository.initialize();
+    _visionRepository?.setFaceDetectionEnabled(_settingsRepository.showFaceDetection);
+    _visionRepository?.setRotation(_settingsRepository.modelRotationDegrees);
     notifyListeners();
   }
 
@@ -32,6 +40,7 @@ class SettingsViewModel extends ChangeNotifier {
 
   Future<void> setShowFaceDetection(bool value) async {
     await _settingsRepository.setShowFaceDetection(value);
+    _visionRepository?.setFaceDetectionEnabled(value);
     notifyListeners();
   }
 
@@ -42,6 +51,7 @@ class SettingsViewModel extends ChangeNotifier {
 
   Future<void> setModelRotationDegrees(int value) async {
     await _settingsRepository.setModelRotationDegrees(value);
+    _visionRepository?.setRotation(value);
     notifyListeners();
   }
 

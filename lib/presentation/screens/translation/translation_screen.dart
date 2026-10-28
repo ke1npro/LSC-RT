@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
@@ -39,22 +38,26 @@ class _TranslationScreenState extends State<TranslationScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Visor de Cámara con BodyPosePainter reactivo
-          CameraViewport(
-            controller: translationVm.cameraDataSource.controller,
-            isFrontCamera: translationVm.isFrontCamera,
-            isSwitching: translationVm.isCameraSwitching,
-            isPermissionDenied: translationVm.isCameraPermissionDenied,
-            errorMessage: translationVm.cameraErrorMessage,
-            onRetry: () => translationVm.retryCamera(),
-            onSizeChanged: (size) => translationVm.setViewportSize(size),
-            overlay: CustomPaint(
-              size: Size.infinite,
-              painter: BodyPosePainter(
-                pose: translationVm.currentPose,
-                showOverlay: settingsVm.showMediaPipeOverlay,
-                showFace: settingsVm.showFaceDetection,
-                isMirrored: translationVm.isFrontCamera,
+          // 1. Visor de Cámara con BodyPosePainter reactivo aislado
+          RepaintBoundary(
+            child: CameraViewport(
+              controller: translationVm.cameraDataSource.controller,
+              isFrontCamera: translationVm.isFrontCamera,
+              isSwitching: translationVm.isCameraSwitching,
+              isPermissionDenied: translationVm.isCameraPermissionDenied,
+              errorMessage: translationVm.cameraErrorMessage,
+              onRetry: () => translationVm.retryCamera(),
+              onSizeChanged: (size) => translationVm.setViewportSize(size),
+              overlay: RepaintBoundary(
+                child: CustomPaint(
+                  size: Size.infinite,
+                  painter: BodyPosePainter(
+                    pose: translationVm.currentPose,
+                    showOverlay: settingsVm.showMediaPipeOverlay,
+                    showFace: settingsVm.showFaceDetection,
+                    isMirrored: translationVm.isFrontCamera,
+                  ),
+                ),
               ),
             ),
           ),
@@ -109,18 +112,21 @@ class _TranslationScreenState extends State<TranslationScreen> {
   }
 
   Widget _buildRecentWordsRibbon(TranslationViewModel vm) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceGlass.withValues(alpha: 0.8),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.glassBorder),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xF2121727),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.glassBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
-          child: Row(
+        ],
+      ),
+      child: Row(
             children: [
               const Icon(Icons.history_rounded,
                   color: AppColors.cyanAccent, size: 16),
@@ -184,8 +190,6 @@ class _TranslationScreenState extends State<TranslationScreen> {
               ),
             ],
           ),
-        ),
-      ),
-    );
+        );
   }
 }

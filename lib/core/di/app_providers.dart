@@ -50,7 +50,7 @@ class AppProviders {
       Provider<AvatarMotionDataSource>.value(value: avatarDataSource),
       Provider<ITtsService>.value(value: ttsService),
       ChangeNotifierProvider<SettingsViewModel>(
-        create: (_) => SettingsViewModel(settingsRepo, signRepo)..initialize(),
+        create: (_) => SettingsViewModel(settingsRepo, signRepo, visionRepo)..initialize(),
       ),
       ChangeNotifierProvider<TranslationViewModel>(
         create: (_) => TranslationViewModel(

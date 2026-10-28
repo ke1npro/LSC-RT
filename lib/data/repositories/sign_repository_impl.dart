@@ -7,6 +7,7 @@ class SignRepositoryImpl implements ISignRepository {
   final Map<String, List<List<double>>> _factoryDatabase = {};
   final Map<String, List<List<double>>> _customOverrides = {};
   final Map<String, List<List<double>>> _signDatabase = {};
+  Map<String, List<List<double>>>? _cachedDatabase;
   bool _isLoaded = false;
 
   SignRepositoryImpl(this._localStorage);
@@ -27,14 +28,17 @@ class SignRepositoryImpl implements ISignRepository {
   bool get hasCustomOverrides => _customOverrides.isNotEmpty;
 
   @override
-  Map<String, List<List<double>>> get signDatabase =>
-      Map.unmodifiable(_signDatabase);
+  Map<String, List<List<double>>> get signDatabase {
+    _cachedDatabase ??= Map.unmodifiable(_signDatabase);
+    return _cachedDatabase!;
+  }
 
   @override
   Future<void> initialize() async {
     _factoryDatabase.clear();
     _customOverrides.clear();
     _signDatabase.clear();
+    _cachedDatabase = null;
 
     // 1. Cargar base de datos canónica de fábrica desde assets
     try {
@@ -78,6 +82,7 @@ class SignRepositoryImpl implements ISignRepository {
   Future<void> saveSign(String letter, List<List<double>> samples) async {
     _customOverrides[letter] = samples;
     _signDatabase[letter] = samples;
+    _cachedDatabase = null;
     _isLoaded = true;
     try {
       final jsonStr = jsonEncode(_customOverrides);
@@ -91,6 +96,7 @@ class SignRepositoryImpl implements ISignRepository {
     _customOverrides.clear();
     _signDatabase.clear();
     _signDatabase.addAll(_factoryDatabase);
+    _cachedDatabase = null;
     _isLoaded = _signDatabase.isNotEmpty;
   }
 }

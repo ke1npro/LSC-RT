@@ -108,14 +108,26 @@ class TeachingViewModel extends ChangeNotifier {
     await visionRepository.initialize();
     visionRepository.setRotation(settingsRepository?.modelRotationDegrees ?? 270);
 
-    await _handSubscription?.cancel();
-    _handSubscription = visionRepository.handStream.listen(_onHandsDetected);
-
-    await _faceSubscription?.cancel();
-    _faceSubscription = visionRepository.faceStream.listen(_onFacesDetected);
-
     _isInitialized = true;
     notifyListeners();
+  }
+
+  void _startPracticeStreams() {
+    _handSubscription?.cancel();
+    _handSubscription = visionRepository.handStream.listen(_onHandsDetected);
+
+    _faceSubscription?.cancel();
+    _faceSubscription = visionRepository.faceStream.listen(_onFacesDetected);
+  }
+
+  void _stopPracticeStreams() {
+    _handSubscription?.cancel();
+    _handSubscription = null;
+    _faceSubscription?.cancel();
+    _faceSubscription = null;
+    _userPose = null;
+    _rawHands = [];
+    _rawFaces = [];
   }
 
   void setSelectedCategory(String cat) {
@@ -138,12 +150,14 @@ class TeachingViewModel extends ChangeNotifier {
 
   void backToCatalog() {
     _stopDemoLoop();
+    _stopPracticeStreams();
     _selectedSign = null;
     _mode = TeachingMode.catalog;
     notifyListeners();
   }
 
   void backToDemonstration() {
+    _stopPracticeStreams();
     _mode = TeachingMode.demonstration;
     _startDemoLoop();
     notifyListeners();
@@ -153,6 +167,7 @@ class TeachingViewModel extends ChangeNotifier {
     _stopDemoLoop();
     _mode = TeachingMode.practice;
     _matchScore = 0.0;
+    _startPracticeStreams();
     notifyListeners();
 
     // Inicializar cámara si aún no está activa
@@ -279,8 +294,7 @@ class TeachingViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _stopDemoLoop();
-    _handSubscription?.cancel();
-    _faceSubscription?.cancel();
+    _stopPracticeStreams();
     resolveBodyPoseUseCase.reset();
     super.dispose();
   }

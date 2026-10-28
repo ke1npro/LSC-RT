@@ -45,7 +45,7 @@ class PredictSignUseCase {
 
     final db = _signRepository.signDatabase;
     String bestLetter = '-';
-    double minDist = double.infinity;
+    double minDistSq = double.infinity;
 
     db.forEach((letter, samples) {
       for (final sample in samples) {
@@ -54,17 +54,17 @@ class PredictSignUseCase {
         for (int i = 0; i < normVec.length; i++) {
           final diff = normVec[i] - sample[i];
           distSq += diff * diff;
+          if (distSq >= minDistSq) break; // Early exit vectorizado
         }
-        final dist = math.sqrt(distSq);
-        if (dist < minDist) {
-          minDist = dist;
+        if (distSq < minDistSq) {
+          minDistSq = distSq;
           bestLetter = letter;
         }
       }
     });
 
     const double sigma = 0.35;
-    final double confidence = math.exp(-(minDist * minDist) / (2 * sigma * sigma));
+    final double confidence = math.exp(-minDistSq / (2 * sigma * sigma));
 
     if (confidence < 0.35) {
       return SignPrediction(label: '?', confidence: confidence);
