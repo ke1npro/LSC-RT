@@ -62,8 +62,8 @@ class PlatformVisionDataSource implements VisionDataSource {
 
     try {
       _handLandmarkerPlugin = HandLandmarkerPlugin.create(
-        numHands: 1,
-        minHandDetectionConfidence: 0.55,
+        numHands: 2,
+        minHandDetectionConfidence: 0.45,
         delegate: HandLandmarkerDelegate.gpu,
       );
 

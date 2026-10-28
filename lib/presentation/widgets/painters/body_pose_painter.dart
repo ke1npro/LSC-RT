@@ -48,14 +48,22 @@ class BodyPosePainter extends CustomPainter {
       _drawFaceCorners(canvas, currentPose.primaryFace!, size);
     }
 
-    // 2. Renderizado del Brazo Completo Anatómico (Two-Bone IK ya resuelto)
+    // 2. Renderizado de Brazos Anatómicos (Soporte simultáneo de 1 o 2 brazos Two-Bone IK)
     for (final arm in currentPose.arms) {
       _drawArm(canvas, arm);
     }
 
-    // 3. Renderizado de la Mano (21 Landmarks + Huesos finos)
-    for (final hand in currentPose.hands) {
-      _drawHand(canvas, hand, size);
+    // 3. Renderizado de Manos (21 Landmarks + Huesos finos por cada mano detectada)
+    for (int i = 0; i < currentPose.hands.length; i++) {
+      final hand = currentPose.hands[i];
+      // Si hay 2 manos, diferenciar izquierda (ámbar) y derecha (turquesa)
+      final isLeft = currentPose.hands.length >= 2
+          ? (hand.wrist.x < 0.5)
+          : false;
+      final Color handColor =
+          isLeft ? const Color(0xFFFFB020) : AppColors.cyanAccent;
+
+      _drawHand(canvas, hand, size, handColor);
     }
 
     canvas.restore();
@@ -97,26 +105,30 @@ class BodyPosePainter extends CustomPainter {
   }
 
   void _drawArm(Canvas canvas, ArmSkeleton arm) {
+    final Color armColor = arm.isRightArm
+        ? AppColors.cyanAccent
+        : const Color(0xFFFFB020);
+
     final bonePaint = Paint()
-      ..color = AppColors.cyanAccent.withValues(alpha: 0.8)
-      ..strokeWidth = 2.2
+      ..color = armColor.withValues(alpha: 0.8)
+      ..strokeWidth = 2.4
       ..strokeCap = StrokeCap.round;
 
     final claviclePaint = Paint()
-      ..color = AppColors.cyanAccent.withValues(alpha: 0.35)
+      ..color = armColor.withValues(alpha: 0.35)
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round;
 
     final jointFill = Paint()
-      ..color = AppColors.cyanAccent
+      ..color = armColor
       ..style = PaintingStyle.fill;
 
     final jointHalo = Paint()
-      ..color = AppColors.cyanAccent.withValues(alpha: 0.20)
+      ..color = armColor.withValues(alpha: 0.20)
       ..style = PaintingStyle.fill;
 
     final jointStroke = Paint()
-      ..color = Colors.white.withValues(alpha: 0.8)
+      ..color = Colors.white.withValues(alpha: 0.85)
       ..strokeWidth = 1.2
       ..style = PaintingStyle.stroke;
 
@@ -125,7 +137,7 @@ class BodyPosePainter extends CustomPainter {
     final elbow = Offset(arm.elbow.x, arm.elbow.y);
     final wrist = Offset(arm.wrist.x, arm.wrist.y);
 
-    // Línea de clavícula
+    // Línea de clavícula hacia esternón
     canvas.drawLine(shoulder, sternum, claviclePaint);
     // Húmero (Hombro -> Codo)
     canvas.drawLine(shoulder, elbow, bonePaint);
@@ -143,14 +155,19 @@ class BodyPosePainter extends CustomPainter {
     canvas.drawCircle(elbow, 4.5, jointStroke);
   }
 
-  void _drawHand(Canvas canvas, HandPose hand, Size size) {
+  void _drawHand(
+    Canvas canvas,
+    HandPose hand,
+    Size size,
+    Color color,
+  ) {
     final bonePaint = Paint()
-      ..color = AppColors.cyanAccent.withValues(alpha: 0.9)
+      ..color = color.withValues(alpha: 0.9)
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round;
 
     final jointFill = Paint()
-      ..color = AppColors.cyanAccent
+      ..color = color
       ..style = PaintingStyle.fill;
 
     final jointStroke = Paint()

@@ -12,6 +12,7 @@ import '../../domain/repositories/i_sign_repository.dart';
 import '../../domain/repositories/i_vision_repository.dart';
 import '../../domain/usecases/calibrate_sign_usecase.dart';
 import '../../domain/usecases/predict_sign_usecase.dart';
+import '../../domain/usecases/recognize_word_sign_usecase.dart';
 import '../../domain/usecases/resolve_body_pose_usecase.dart';
 
 class TranslationViewModel extends ChangeNotifier {
@@ -23,6 +24,7 @@ class TranslationViewModel extends ChangeNotifier {
   final PredictSignUseCase predictSignUseCase;
   final CalibrateSignUseCase calibrateSignUseCase;
   final ResolveBodyPoseUseCase resolveBodyPoseUseCase;
+  final RecognizeWordSignUseCase recognizeWordSignUseCase;
 
   StreamSubscription? _handSubscription;
   StreamSubscription? _faceSubscription;
@@ -55,7 +57,9 @@ class TranslationViewModel extends ChangeNotifier {
     required this.predictSignUseCase,
     required this.calibrateSignUseCase,
     required this.resolveBodyPoseUseCase,
-  });
+    RecognizeWordSignUseCase? recognizeWordSignUseCase,
+  }) : recognizeWordSignUseCase =
+            recognizeWordSignUseCase ?? RecognizeWordSignUseCase();
 
   bool get isInitialized => _isInitialized;
   String get statusMessage => _statusMessage;
@@ -63,10 +67,10 @@ class TranslationViewModel extends ChangeNotifier {
   BodyPose? get currentPose => _currentPose;
   bool get hasHand => _currentPose?.hasHand ?? false;
   List<String> get recentWords => List.unmodifiable(_recentWords);
+
   bool get isFrontCamera =>
       cameraDataSource.currentCamera?.lensDirection ==
       CameraLensDirection.front;
-
   bool get isCameraSwitching => cameraDataSource.isSwitching;
   bool get isCameraPermissionDenied => cameraDataSource.isPermissionDenied;
   String? get cameraErrorMessage => cameraDataSource.errorMessage;
@@ -74,6 +78,9 @@ class TranslationViewModel extends ChangeNotifier {
   bool get isCalibrating => _isCalibrating;
   String get targetLetter => _targetLetter;
   int get calibrationSamplesCount => _calibrationBuffer.length;
+  double get calibrationProgress =>
+      _calibrationBuffer.length / totalCalibrationSamples;
+
   int get calibratedSignsCount => signRepository.calibratedCount;
 
   Future<void> initialize() async {
@@ -135,6 +142,7 @@ class TranslationViewModel extends ChangeNotifier {
   Future<void> switchCamera() async {
     if (cameraDataSource.cameras.length < 2 || cameraDataSource.isSwitching) return;
     resolveBodyPoseUseCase.reset();
+    recognizeWordSignUseCase.reset();
     _currentPrediction = null;
     _currentPose = null;
     notifyListeners();
@@ -149,21 +157,40 @@ class TranslationViewModel extends ChangeNotifier {
 
   void _onHandsDetected(List<HandPose> hands) {
     _rawHands = hands;
+    _recomputeBodyPose();
+
     if (hands.isEmpty) {
       _currentPrediction = null;
+      recognizeWordSignUseCase.reset();
     } else {
-      final hand = hands.first;
-      _currentPrediction = predictSignUseCase.execute(hand);
+      // 1. Prioridad: Clasificador de señas de palabras (Bimanuales y Unimanuales Core)
+      final wordPred = recognizeWordSignUseCase.execute(
+        hands: _rawHands,
+        pose: _currentPose,
+      );
 
-      if (_currentPrediction != null &&
-          _currentPrediction!.isRecognized &&
-          _currentPrediction!.confidence >= 0.70) {
-        _registerRecognizedWord(_currentPrediction!.label);
+      if (wordPred != null &&
+          wordPred.isRecognized &&
+          wordPred.confidence >= 0.70) {
+        _currentPrediction = wordPred;
+        _registerRecognizedWord(wordPred.label);
+      } else if (hands.length == 1) {
+        // 2. Detección de Letras del Abecedario (Dactilología individual estática)
+        final letterPred = predictSignUseCase.execute(hands.first);
+        _currentPrediction = letterPred;
+
+        if (letterPred != null &&
+            letterPred.isRecognized &&
+            letterPred.confidence >= 0.70) {
+          _registerRecognizedWord(letterPred.label);
+        }
+      } else {
+        _currentPrediction = wordPred;
       }
 
       // Si estuviera en modo calibración
       if (_isCalibrating && _calibrationBuffer.length < totalCalibrationSamples) {
-        final sample = calibrateSignUseCase.extractNormalizedFeatures(hand);
+        final sample = calibrateSignUseCase.extractNormalizedFeatures(hands.first);
         if (sample.isNotEmpty) {
           _calibrationBuffer.add(sample);
           if (_calibrationBuffer.length >= totalCalibrationSamples) {
@@ -173,7 +200,6 @@ class TranslationViewModel extends ChangeNotifier {
       }
     }
 
-    _recomputeBodyPose();
     notifyListeners();
   }
 
@@ -216,6 +242,7 @@ class TranslationViewModel extends ChangeNotifier {
     );
   }
 
+  // --- Métodos de Calibración ---
   void startCalibration(String letter) {
     _targetLetter = letter;
     _calibrationBuffer.clear();
