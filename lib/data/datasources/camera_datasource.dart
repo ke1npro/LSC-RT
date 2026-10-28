@@ -97,12 +97,9 @@ class CameraDataSource {
     final desc = _cameras[_selectedCameraIndex];
     final newController = CameraController(
       desc,
-      ResolutionPreset.low,
+      ResolutionPreset.medium,
       enableAudio: false,
-      fps: 24,
-      imageFormatGroup: defaultTargetPlatform == TargetPlatform.android
-          ? ImageFormatGroup.nv21
-          : null,
+      imageFormatGroup: ImageFormatGroup.yuv420,
     );
 
     try {

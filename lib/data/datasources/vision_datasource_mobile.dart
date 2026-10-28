@@ -104,16 +104,16 @@ class PlatformVisionDataSource implements VisionDataSource {
 
     // 1. Control de contrapresión (Backpressure): si MediaPipe está ocupado procesando
     // el fotograma previo, descartar el fotograma actual para no saturar memoria JNI.
-    // Timeout de seguridad de 100ms por si un fotograma no retorna detección.
     final bool canProcessHand = !_isProcessingHand ||
-        now.difference(_lastHandTime).inMilliseconds > 100;
+        now.difference(_lastHandTime).inMilliseconds > 50;
 
-    if (canProcessHand) {
+    if (canProcessHand && image.planes.length >= 3) {
       _isProcessingHand = true;
       _lastHandTime = now;
       try {
         _handLandmarkerPlugin!.processFrame(image, sensorOrientation);
-      } catch (_) {
+      } catch (e) {
+        debugPrint('Error en handLandmarker.processFrame: $e');
         _isProcessingHand = false;
       }
     }
