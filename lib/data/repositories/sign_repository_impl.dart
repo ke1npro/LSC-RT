@@ -1,16 +1,22 @@
 import 'dart:convert';
 import '../../domain/repositories/i_sign_repository.dart';
 import '../datasources/local_storage_datasource.dart';
+import '../datasources/secure_storage_datasource.dart';
 
 class SignRepositoryImpl implements ISignRepository {
   final LocalStorageDataSource _localStorage;
+  final SecureStorageDataSource _secureStorage;
   final Map<String, List<List<double>>> _factoryDatabase = {};
   final Map<String, List<List<double>>> _customOverrides = {};
   final Map<String, List<List<double>>> _signDatabase = {};
   Map<String, List<List<double>>>? _cachedDatabase;
   bool _isLoaded = false;
 
-  SignRepositoryImpl(this._localStorage);
+  SignRepositoryImpl(
+    this._localStorage, [
+    SecureStorageDataSource? secureStorage,
+  ]) : _secureStorage = secureStorage ??
+            SecureStorageDataSource(legacyStorage: _localStorage);
 
   @override
   bool get isLoaded => _isLoaded;
@@ -58,9 +64,9 @@ class SignRepositoryImpl implements ISignRepository {
       }
     } catch (_) {}
 
-    // 2. Cargar overrides personalizados del usuario desde LocalStorage
+    // 2. Cargar overrides personalizados del usuario desde SecureStorage cifrado en hardware
     try {
-      final customJson = await _localStorage.getString('custom_lsc_db');
+      final customJson = await _secureStorage.read('custom_lsc_db');
       if (customJson != null && customJson.isNotEmpty) {
         final decoded = jsonDecode(customJson) as Map<String, dynamic>;
         decoded.forEach((k, v) {
@@ -86,13 +92,13 @@ class SignRepositoryImpl implements ISignRepository {
     _isLoaded = true;
     try {
       final jsonStr = jsonEncode(_customOverrides);
-      await _localStorage.setString('custom_lsc_db', jsonStr);
+      await _secureStorage.write('custom_lsc_db', jsonStr);
     } catch (_) {}
   }
 
   @override
   Future<void> clearCustomSigns() async {
-    await _localStorage.remove('custom_lsc_db');
+    await _secureStorage.delete('custom_lsc_db');
     _customOverrides.clear();
     _signDatabase.clear();
     _signDatabase.addAll(_factoryDatabase);

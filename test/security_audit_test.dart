@@ -1,0 +1,72 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sign_language_app/data/datasources/local_storage_datasource.dart';
+import 'package:sign_language_app/data/datasources/secure_storage_datasource.dart';
+import 'package:sign_language_app/data/repositories/sign_repository_impl.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('Security Audit Tests (OWASP Mobile Top 10)', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      FlutterSecureStorage.setMockInitialValues({});
+    });
+
+    test('H-04 / M9 & M10: SecureStorageDataSource migrates and stores sensitive data securely', () async {
+      final legacy = LocalStorageDataSource();
+      const testKey = 'custom_lsc_db';
+      const testPayload = '{"A": [[0.1, 0.2, 0.3]]}';
+
+      // 1. Simular dato legado en texto plano en SharedPreferences
+      await legacy.setString(testKey, testPayload);
+      expect(await legacy.getString(testKey), equals(testPayload));
+
+      // 2. Inicializar SecureStorageDataSource con migracion automatica
+      final secureStorage = SecureStorageDataSource(legacyStorage: legacy);
+
+      // Al leer por primera vez, debe retornar el dato y haberlo migrado a SecureStorage
+      final retrieved = await secureStorage.read(testKey);
+      expect(retrieved, equals(testPayload));
+
+      // El dato legado en SharedPreferences en texto claro debe haber sido eliminado
+      final legacyAfter = await legacy.getString(testKey);
+      expect(legacyAfter, isNull);
+
+      // 3. Escribir nueva actualizacion sensible en SecureStorage
+      const updatedPayload = '{"B": [[0.4, 0.5, 0.6]]}';
+      final writeSuccess = await secureStorage.write(testKey, updatedPayload);
+      expect(writeSuccess, isTrue);
+
+      final secureRetrieved = await secureStorage.read(testKey);
+      expect(secureRetrieved, equals(updatedPayload));
+
+      // 4. Eliminar de forma segura
+      await secureStorage.delete(testKey);
+      expect(await secureStorage.read(testKey), isNull);
+    });
+
+    test('H-04 / M9: SignRepositoryImpl stores and clears custom calibrations in secure storage', () async {
+      final legacy = LocalStorageDataSource();
+      final secureStorage = SecureStorageDataSource(legacyStorage: legacy);
+      final repo = SignRepositoryImpl(legacy, secureStorage);
+
+      await repo.initialize();
+      expect(repo.hasCustomOverrides, isFalse);
+
+      // Guardar calibracion personalizada
+      await repo.saveSign('Z', [
+        [0.1, 0.2, 0.3, 0.4]
+      ]);
+
+      expect(repo.hasCustomOverrides, isTrue);
+      expect(repo.customOverridesCount, equals(1));
+
+      // Limpiar calibraciones de forma segura
+      await repo.clearCustomSigns();
+      expect(repo.hasCustomOverrides, isFalse);
+      expect(repo.customOverridesCount, equals(0));
+    });
+  });
+}

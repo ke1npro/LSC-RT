@@ -6,6 +6,7 @@ import '../services/tts_service.dart';
 import '../../data/datasources/avatar_motion_datasource.dart';
 import '../../data/datasources/camera_datasource.dart';
 import '../../data/datasources/local_storage_datasource.dart';
+import '../../data/datasources/secure_storage_datasource.dart';
 import '../../data/datasources/vision_datasource_factory.dart';
 import '../../data/repositories/settings_repository_impl.dart';
 import '../../data/repositories/sign_repository_impl.dart';
@@ -28,13 +29,14 @@ class AppProviders {
 
   static List<SingleChildWidget> buildProviders(List<CameraDescription> cameras) {
     final localStorage = LocalStorageDataSource();
+    final secureStorage = SecureStorageDataSource(legacyStorage: localStorage);
     final visionDataSource = getVisionDataSource();
     final cameraDataSource = CameraDataSource(cameras);
     final avatarDataSource = AvatarMotionDataSource();
     final ttsService = TtsService();
 
     final IVisionRepository visionRepo = VisionRepositoryImpl(visionDataSource);
-    final ISignRepository signRepo = SignRepositoryImpl(localStorage);
+    final ISignRepository signRepo = SignRepositoryImpl(localStorage, secureStorage);
     final ISettingsRepository settingsRepo = SettingsRepositoryImpl(localStorage);
 
     final predictUseCase = PredictSignUseCase(signRepo);
