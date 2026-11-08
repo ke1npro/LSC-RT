@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sign_language_app/core/services/window_security_service.dart';
 import 'package:sign_language_app/data/datasources/local_storage_datasource.dart';
 import 'package:sign_language_app/data/datasources/secure_storage_datasource.dart';
 import 'package:sign_language_app/data/repositories/sign_repository_impl.dart';
@@ -67,6 +68,13 @@ void main() {
       await repo.clearCustomSigns();
       expect(repo.hasCustomOverrides, isFalse);
       expect(repo.customOverridesCount, equals(0));
+    });
+
+    test('H-05 / M6: WindowSecurityService handles FLAG_SECURE method channel calls gracefully', () async {
+      // En entorno de prueba unitaria sin host nativo, no debe lanzar excepciones no controladas
+      await expectLater(WindowSecurityService.setSecureMode(true), completes);
+      final isActive = await WindowSecurityService.isSecureModeActive();
+      expect(isActive, isFalse); // Fallback seguro en entorno headless/test
     });
   });
 }
