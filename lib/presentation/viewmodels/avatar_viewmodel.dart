@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/theme/avatar_theme.dart';
+import '../../core/utils/security_input_validator.dart';
 import '../../data/datasources/avatar_motion_datasource.dart';
 import '../../domain/entities/avatar_sign_data.dart';
 
@@ -100,7 +101,7 @@ class AvatarViewModel extends ChangeNotifier {
   }
 
   void setSearchQuery(String query) {
-    _searchQuery = query;
+    _searchQuery = SecurityInputValidator.sanitizeSearchQuery(query);
     notifyListeners();
   }
 

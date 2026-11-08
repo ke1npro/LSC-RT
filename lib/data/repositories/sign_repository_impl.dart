@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../../core/utils/security_input_validator.dart';
 import '../../domain/repositories/i_sign_repository.dart';
 import '../datasources/local_storage_datasource.dart';
 import '../datasources/secure_storage_datasource.dart';
@@ -46,20 +47,19 @@ class SignRepositoryImpl implements ISignRepository {
     _signDatabase.clear();
     _cachedDatabase = null;
 
-    // 1. Cargar base de datos canónica de fábrica desde assets
+    // 1. Cargar base de datos canónica de fábrica desde assets con validacion defensiva
     try {
       final lscJsonStr =
           await _localStorage.loadAssetString('assets/lsc_database.json');
       if (lscJsonStr.trim().isNotEmpty && lscJsonStr.trim() != '{}') {
         final decoded = jsonDecode(lscJsonStr) as Map<String, dynamic>;
         decoded.forEach((k, v) {
-          final list = (v as List<dynamic>).map((sample) {
-            return (sample as List<dynamic>)
-                .map((val) => (val as num).toDouble())
-                .toList();
-          }).toList();
-          _factoryDatabase[k] = list;
-          _signDatabase[k] = list;
+          final sanitizedKey = SecurityInputValidator.sanitizeSignKey(k);
+          final validSamples = SecurityInputValidator.validateSignSamples(v);
+          if (sanitizedKey != null && validSamples.isNotEmpty) {
+            _factoryDatabase[sanitizedKey] = validSamples;
+            _signDatabase[sanitizedKey] = validSamples;
+          }
         });
       }
     } catch (_) {}
@@ -70,13 +70,12 @@ class SignRepositoryImpl implements ISignRepository {
       if (customJson != null && customJson.isNotEmpty) {
         final decoded = jsonDecode(customJson) as Map<String, dynamic>;
         decoded.forEach((k, v) {
-          final list = (v as List<dynamic>).map((sample) {
-            return (sample as List<dynamic>)
-                .map((val) => (val as num).toDouble())
-                .toList();
-          }).toList();
-          _customOverrides[k] = list;
-          _signDatabase[k] = list; // Aplica override
+          final sanitizedKey = SecurityInputValidator.sanitizeSignKey(k);
+          final validSamples = SecurityInputValidator.validateSignSamples(v);
+          if (sanitizedKey != null && validSamples.isNotEmpty) {
+            _customOverrides[sanitizedKey] = validSamples;
+            _signDatabase[sanitizedKey] = validSamples; // Aplica override
+          }
         });
       }
     } catch (_) {}
@@ -86,8 +85,12 @@ class SignRepositoryImpl implements ISignRepository {
 
   @override
   Future<void> saveSign(String letter, List<List<double>> samples) async {
-    _customOverrides[letter] = samples;
-    _signDatabase[letter] = samples;
+    final sanitizedKey = SecurityInputValidator.sanitizeSignKey(letter);
+    final validSamples = SecurityInputValidator.validateSignSamples(samples);
+    if (sanitizedKey == null || validSamples.isEmpty) return;
+
+    _customOverrides[sanitizedKey] = validSamples;
+    _signDatabase[sanitizedKey] = validSamples;
     _cachedDatabase = null;
     _isLoaded = true;
     try {

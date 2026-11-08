@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_language_app/core/services/window_security_service.dart';
+import 'package:sign_language_app/core/utils/security_input_validator.dart';
 import 'package:sign_language_app/data/datasources/local_storage_datasource.dart';
 import 'package:sign_language_app/data/datasources/secure_storage_datasource.dart';
 import 'package:sign_language_app/data/repositories/sign_repository_impl.dart';
@@ -75,6 +76,24 @@ void main() {
       await expectLater(WindowSecurityService.setSecureMode(true), completes);
       final isActive = await WindowSecurityService.isSecureModeActive();
       expect(isActive, isFalse); // Fallback seguro en entorno headless/test
+    });
+
+    test('H-06 / M4: SecurityInputValidator sanitizes keys, floats and search strings', () {
+      // Claves de seña
+      expect(SecurityInputValidator.sanitizeSignKey('Hola Mundo'), equals('Hola Mundo'));
+      expect(SecurityInputValidator.sanitizeSignKey(''), isNull);
+      expect(SecurityInputValidator.sanitizeSignKey('a' * 50), isNull); // Excede longitud maxima
+      expect(SecurityInputValidator.sanitizeSignKey('Sign<script>'), isNull); // Caracteres invalidos
+
+      // Validacion numerica contra NaN e Infinity
+      expect(SecurityInputValidator.validateNumericSample([0.1, 0.5, 0.9]), equals([0.1, 0.5, 0.9]));
+      expect(SecurityInputValidator.validateNumericSample([0.1, double.nan, 0.9]), isNull);
+      expect(SecurityInputValidator.validateNumericSample([0.1, double.infinity, 0.9]), isNull);
+      expect(SecurityInputValidator.validateNumericSample([0.1, 999.0, 0.9]), isNull); // Out of bounds
+
+      // Sanitizacion de busqueda
+      expect(SecurityInputValidator.sanitizeSearchQuery('  Gracias\x00\x1F  '), equals('Gracias'));
+      expect(SecurityInputValidator.sanitizeSearchQuery('b' * 100).length, equals(64));
     });
   });
 }
