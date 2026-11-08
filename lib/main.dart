@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'core/di/app_providers.dart';
 import 'core/theme/app_theme.dart';
+import 'core/utils/app_logger.dart';
 import 'presentation/screens/main_scaffold.dart';
 
 List<CameraDescription> _cameras = [];
@@ -13,7 +14,7 @@ Future<void> main() async {
   try {
     _cameras = await availableCameras();
   } catch (e) {
-    debugPrint('Error al inicializar cámaras: $e');
+    AppLogger.e('Main: Error al inicializar cámaras', e);
   }
 
   runApp(const LscApp());

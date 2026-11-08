@@ -5,6 +5,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:hand_landmarker/hand_landmarker.dart';
+import '../../core/utils/app_logger.dart';
 import '../../domain/entities/face_bounds.dart';
 import '../../domain/entities/hand_pose.dart';
 import '../../domain/entities/landmark_point.dart';
@@ -96,7 +97,7 @@ class PlatformVisionDataSource implements VisionDataSource {
         _handController.add(detected);
       });
     } catch (e) {
-      debugPrint('Aviso: Error configurando HandLandmarker con delegate (${_useGpu ? "GPU" : "CPU"}): $e');
+      AppLogger.w('VisionDataSourceMobile: Error configurando HandLandmarker (${_useGpu ? "GPU" : "CPU"}): $e');
     }
   }
 
@@ -117,7 +118,7 @@ class PlatformVisionDataSource implements VisionDataSource {
         ),
       );
     } catch (e) {
-      debugPrint('Aviso: FaceDetector no disponible: $e');
+      AppLogger.w('VisionDataSourceMobile: FaceDetector no disponible: $e');
     }
 
     _initialized = true;
@@ -144,7 +145,7 @@ class PlatformVisionDataSource implements VisionDataSource {
       try {
         _handLandmarkerPlugin!.processFrame(image, sensorOrientation);
       } catch (e) {
-        debugPrint('Error en handLandmarker.processFrame: $e');
+        AppLogger.e('VisionDataSourceMobile: Error en handLandmarker.processFrame', e);
         _isProcessingHand = false;
       }
     }

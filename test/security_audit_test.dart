@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_language_app/core/services/window_security_service.dart';
+import 'package:sign_language_app/core/utils/app_logger.dart';
 import 'package:sign_language_app/core/utils/security_input_validator.dart';
 import 'package:sign_language_app/data/datasources/local_storage_datasource.dart';
 import 'package:sign_language_app/data/datasources/secure_storage_datasource.dart';
@@ -94,6 +95,12 @@ void main() {
       // Sanitizacion de busqueda
       expect(SecurityInputValidator.sanitizeSearchQuery('  Gracias\x00\x1F  '), equals('Gracias'));
       expect(SecurityInputValidator.sanitizeSearchQuery('b' * 100).length, equals(64));
+    });
+
+    test('H-07 / M1 & M8: AppLogger suppresses sensitive outputs safely without throwing', () {
+      expect(() => AppLogger.d('Mensaje de prueba de debug'), returnsNormally);
+      expect(() => AppLogger.w('Mensaje de advertencia'), returnsNormally);
+      expect(() => AppLogger.e('Mensaje de error', Exception('Test')), returnsNormally);
     });
   });
 }

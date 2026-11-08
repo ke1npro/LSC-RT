@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import '../utils/app_logger.dart';
 
 abstract class ITtsService {
   Future<void> initialize();
@@ -39,7 +39,7 @@ class TtsService implements ITtsService {
       await _flutterTts.setPitch(1.0);
       _isInitialized = true;
     } catch (e) {
-      debugPrint('TtsService: Error al inicializar TTS: $e');
+      AppLogger.e('TtsService: Error al inicializar TTS', e);
       _isInitialized = false;
     }
   }
@@ -71,7 +71,7 @@ class TtsService implements ITtsService {
       }
       await _flutterTts.speak(text);
     } catch (e) {
-      debugPrint('TtsService: Excepción no bloqueante en speak: $e');
+      AppLogger.w('TtsService: Excepción no bloqueante en speak: $e');
     }
   }
 

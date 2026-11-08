@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
+import '../../core/utils/app_logger.dart';
 
 class CameraDataSource {
   List<CameraDescription> _cameras;
@@ -79,7 +80,7 @@ class CameraDataSource {
           _selectedCameraIndex = (frontIdx != -1) ? frontIdx : 0;
         }
       } catch (e) {
-        debugPrint('Error al consultar availableCameras: $e');
+        AppLogger.w('CameraDataSource: Error al consultar availableCameras: $e');
         if (_isPermissionException(e)) {
           _isPermissionDenied = true;
           _errorMessage =
@@ -123,7 +124,7 @@ class CameraDataSource {
         });
       }
     } catch (e) {
-      debugPrint('Error inicializando CameraDataSource: $e');
+      AppLogger.e('CameraDataSource: Error inicializando cámara', e);
       _isInitialized = false;
       try {
         await newController.dispose();
@@ -166,7 +167,7 @@ class CameraDataSource {
       _selectedCameraIndex = (_selectedCameraIndex + 1) % _cameras.length;
       await initializeCamera(onFrame: onFrame);
     } catch (e) {
-      debugPrint('Error en switchCamera: $e');
+      AppLogger.e('CameraDataSource: Error en switchCamera', e);
       _errorMessage = 'Error al cambiar de cámara.';
     } finally {
       _isSwitching = false;
