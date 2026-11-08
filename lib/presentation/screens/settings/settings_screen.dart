@@ -236,14 +236,16 @@ class SettingsScreen extends StatelessWidget {
                           );
 
                           if (confirm == true) {
-                            await settingsVm.restoreFactoryDataset();
+                            final success = await settingsVm.restoreFactoryDataset();
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
+                                SnackBar(
                                   content: Text(
-                                    'Base de datos restaurada a valores canónicos de fábrica.',
+                                    success
+                                        ? 'Base de datos restaurada a valores canónicos de fábrica.'
+                                        : 'Autenticación biométrica requerida no completada.',
                                   ),
-                                  duration: Duration(seconds: 3),
+                                  duration: const Duration(seconds: 3),
                                 ),
                               );
                             }

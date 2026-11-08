@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../../core/services/biometric_auth_service.dart';
 import '../../domain/repositories/i_settings_repository.dart';
 import '../../domain/repositories/i_sign_repository.dart';
 import '../../domain/repositories/i_vision_repository.dart';
@@ -7,12 +8,14 @@ class SettingsViewModel extends ChangeNotifier {
   final ISettingsRepository _settingsRepository;
   final ISignRepository _signRepository;
   final IVisionRepository? _visionRepository;
+  final BiometricAuthService _biometricService;
 
   SettingsViewModel(
     this._settingsRepository,
     this._signRepository, [
     this._visionRepository,
-  ]);
+    BiometricAuthService? biometricService,
+  ]) : _biometricService = biometricService ?? BiometricAuthService();
 
   bool get showMediaPipeOverlay => _settingsRepository.showMediaPipeOverlay;
   bool get showFaceDetection => _settingsRepository.showFaceDetection;
@@ -69,8 +72,15 @@ class SettingsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> restoreFactoryDataset() async {
+  Future<bool> restoreFactoryDataset({bool requireBiometrics = true}) async {
+    if (requireBiometrics) {
+      final authenticated = await _biometricService.authenticate(
+        reason: 'Verifica tu identidad para restablecer las calibraciones biometricas locales',
+      );
+      if (!authenticated) return false;
+    }
     await _signRepository.clearCustomSigns();
     notifyListeners();
+    return true;
   }
 }

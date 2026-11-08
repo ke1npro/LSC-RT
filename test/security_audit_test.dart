@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sign_language_app/core/services/biometric_auth_service.dart';
 import 'package:sign_language_app/core/services/window_security_service.dart';
 import 'package:sign_language_app/core/utils/app_logger.dart';
 import 'package:sign_language_app/core/utils/security_input_validator.dart';
@@ -101,6 +102,17 @@ void main() {
       expect(() => AppLogger.d('Mensaje de prueba de debug'), returnsNormally);
       expect(() => AppLogger.w('Mensaje de advertencia'), returnsNormally);
       expect(() => AppLogger.e('Mensaje de error', Exception('Test')), returnsNormally);
+    });
+
+    test('BONUS / Biometria: BiometricAuthService handles authentication gracefully', () async {
+      final bioService = BiometricAuthService();
+      // En entorno de test sin hardware biometrico
+      final isAvailable = await bioService.isBiometricsAvailable();
+      expect(isAvailable, isFalse);
+
+      final authResult = await bioService.authenticate(reason: 'Test de auditoria');
+      // Al no estar disponible en test, permite acceso sin bloquear
+      expect(authResult, isTrue);
     });
   });
 }
