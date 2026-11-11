@@ -174,6 +174,22 @@ class CameraDataSource {
     }
   }
 
+  bool get isRecordingVideo => _controller?.value.isRecordingVideo ?? false;
+
+  Future<void> startVideoRecording() async {
+    if (_controller == null || !_isInitialized) {
+      throw StateError('Cámara no inicializada');
+    }
+    if (_controller!.value.isRecordingVideo) return;
+    await _controller!.startVideoRecording();
+  }
+
+  Future<XFile?> stopVideoRecording() async {
+    if (_controller == null || !_isInitialized) return null;
+    if (!_controller!.value.isRecordingVideo) return null;
+    return await _controller!.stopVideoRecording();
+  }
+
   Future<void> disposeCamera() async {
     final oldController = _controller;
     _controller = null;

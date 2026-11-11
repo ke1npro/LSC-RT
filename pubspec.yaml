@@ -42,6 +42,8 @@ dependencies:
   flutter_tts: ^4.2.5
   flutter_secure_storage: ^11.2.0
   local_auth: ^3.0.2
+  video_player: ^2.14.1
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:
@@ -66,6 +68,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/hand_landmarker.task
     - assets/lsc_database.json
     - assets/lsc_database_backup.json
     - assets/lsc_avatar_motion_bank.json

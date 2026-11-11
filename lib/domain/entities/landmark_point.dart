@@ -9,6 +9,20 @@ class LandmarkPoint {
     this.z = 0.0,
   });
 
+  Map<String, dynamic> toJson() => {
+        'x': x,
+        'y': y,
+        'z': z,
+      };
+
+  factory LandmarkPoint.fromJson(Map<String, dynamic> json) {
+    return LandmarkPoint(
+      x: (json['x'] as num?)?.toDouble() ?? 0.0,
+      y: (json['y'] as num?)?.toDouble() ?? 0.0,
+      z: (json['z'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

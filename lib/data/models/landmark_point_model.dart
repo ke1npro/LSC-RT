@@ -15,6 +15,7 @@ class LandmarkPointModel extends LandmarkPoint {
     );
   }
 
+  @override
   Map<String, dynamic> toJson() => {
     'x': x,
     'y': y,

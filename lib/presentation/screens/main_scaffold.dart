@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import 'avatar/avatar_screen.dart';
+import 'dictionary/dictionary_screen.dart';
 import 'settings/settings_screen.dart';
 import 'teaching/teaching_screen.dart';
 import 'translation/translation_screen.dart';
@@ -16,6 +17,7 @@ class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = const [
+    DictionaryScreen(),
     TranslationScreen(),
     AvatarScreen(),
     TeachingScreen(),
@@ -47,6 +49,11 @@ class _MainScaffoldState extends State<MainScaffold> {
             },
             destinations: const [
               NavigationDestination(
+                icon: Icon(Icons.menu_book_outlined),
+                selectedIcon: Icon(Icons.menu_book_rounded),
+                label: 'Diccionario',
+              ),
+              NavigationDestination(
                 icon: Icon(Icons.translate_rounded),
                 label: 'Traducción',
               ),
@@ -62,7 +69,7 @@ class _MainScaffoldState extends State<MainScaffold> {
               NavigationDestination(
                 icon: Icon(Icons.settings_outlined),
                 selectedIcon: Icon(Icons.settings_rounded),
-                label: 'Configuración',
+                label: 'Ajustes',
               ),
             ],
           ),
