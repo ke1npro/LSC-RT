@@ -18,8 +18,7 @@ import '../../domain/repositories/i_settings_repository.dart';
 import '../../domain/repositories/i_sign_repository.dart';
 import '../../domain/repositories/i_vision_repository.dart';
 import '../../domain/usecases/calibrate_sign_usecase.dart';
-import '../../domain/usecases/evaluate_posture_usecase.dart';
-import '../../domain/usecases/generate_wave_guide_usecase.dart';
+import '../../domain/usecases/evaluate_recorded_sign_practice_usecase.dart';
 import '../../domain/usecases/predict_sign_usecase.dart';
 import '../../domain/usecases/resolve_body_pose_usecase.dart';
 import '../../domain/usecases/select_best_take_usecase.dart';
@@ -49,8 +48,7 @@ class AppProviders {
 
     final predictUseCase = PredictSignUseCase(signRepo);
     final calibrateUseCase = CalibrateSignUseCase(signRepo, predictUseCase);
-    final waveUseCase = GenerateWaveGuideUseCase();
-    final evaluateUseCase = EvaluatePostureUseCase();
+    final evaluatePracticeUseCase = EvaluateRecordedSignPracticeUseCase();
     final selectBestTakeUseCase = SelectBestTakeUseCase();
 
     return [
@@ -94,12 +92,11 @@ class AppProviders {
       ChangeNotifierProvider<TeachingViewModel>(
         create: (_) => TeachingViewModel(
           cameraDataSource: cameraDataSource,
-          visionRepository: visionRepo,
+          videoDataSource: videoDataSource,
+          dictionaryRepository: dictionaryRepo,
           settingsRepository: settingsRepo,
           resolveBodyPoseUseCase: ResolveBodyPoseUseCase(),
-          generateWaveGuideUseCase: waveUseCase,
-          evaluatePostureUseCase: evaluateUseCase,
-          avatarMotionDataSource: avatarDataSource,
+          evaluatePracticeUseCase: evaluatePracticeUseCase,
         ),
       ),
     ];
