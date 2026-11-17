@@ -37,3 +37,6 @@
 # Ofuscación estricta de binarios
 -renamesourcefileattribute SourceFile
 -keepattributes SourceFile,LineNumberTable
+
+# Flutter referencia Play Core (deferred components) que esta app no usa: evita fallo de R8 (H-08)
+-dontwarn com.google.android.play.core.**

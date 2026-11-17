@@ -69,3 +69,14 @@ fast_dtw.*
 *.dylib
 *.o
 *.a
+
+# Seguridad (H-08): nunca versionar firmas, claves ni binarios
+*.jks
+*.keystore
+*.p12
+key.properties
+**/key.properties
+*.apk
+*.aab
+.env
+build/symbols/

@@ -1,7 +1,17 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// H-08 (M7/M8): firma de release con llave propia. key.properties NUNCA se versiona (ver .gitignore).
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+val hasReleaseKey = keystorePropertiesFile.exists()
+if (hasReleaseKey) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
 
 android {
@@ -15,36 +25,58 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.academic.asl.sign_language_app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 28
         targetSdk = flutter.targetSdkVersion
-        // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
-        // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
-        // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
-        // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             isMinifyEnabled = true
             isShrinkResources = true
+            isDebuggable = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            // Con llave propia si existe; si no, solo se permite la de debug con -PallowDebugSigning=true
+            signingConfig = if (hasReleaseKey) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
     aaptOptions {
         noCompress("tflite", "lite")
+    }
+}
+
+// Bloquea builds de release firmados con la llave de debug (APK que se compartiria como "oficial").
+gradle.taskGraph.whenReady {
+    val buildingRelease = allTasks.any {
+        val n = it.name
+        n.contains("Release") && (n.startsWith("assemble") || n.startsWith("bundle") || n.startsWith("package"))
+    }
+    if (buildingRelease && !hasReleaseKey && !project.hasProperty("allowDebugSigning")) {
+        throw GradleException(
+            "Release sin llave propia: falta android/key.properties. " +
+                "No se permite firmar un release con la llave de debug (usa -PallowDebugSigning=true solo para pruebas locales)."
+        )
     }
 }
 
