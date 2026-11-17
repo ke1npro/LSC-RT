@@ -66,6 +66,13 @@ class SecureStorageDataSource {
     }
   }
 
+  /// Lectura ESTRICTA: solo Keystore, jamas cae a SharedPreferences. Para llaves criptograficas.
+  Future<String?> readStrict(String key) => _secureStorage.read(key: key);
+
+  /// Escritura ESTRICTA: lanza excepcion si el Keystore falla (nunca deja la llave en texto claro).
+  Future<void> writeStrict(String key, String value) =>
+      _secureStorage.write(key: key, value: value);
+
   /// Elimina una clave de forma segura en ambos almacenes.
   Future<bool> delete(String key) async {
     try {

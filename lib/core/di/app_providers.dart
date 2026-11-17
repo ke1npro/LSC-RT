@@ -5,6 +5,7 @@ import 'package:provider/single_child_widget.dart';
 import '../services/tts_service.dart';
 import '../../data/datasources/avatar_motion_datasource.dart';
 import '../../data/datasources/camera_datasource.dart';
+import '../../data/datasources/encrypted_file_datasource.dart';
 import '../../data/datasources/local_storage_datasource.dart';
 import '../../data/datasources/secure_storage_datasource.dart';
 import '../../data/datasources/video_landmarker_datasource.dart';
@@ -44,7 +45,8 @@ class AppProviders {
     final IVisionRepository visionRepo = VisionRepositoryImpl(visionDataSource);
     final ISignRepository signRepo = SignRepositoryImpl(localStorage, secureStorage);
     final ISettingsRepository settingsRepo = SettingsRepositoryImpl(localStorage);
-    final IDictionaryRepository dictionaryRepo = DictionaryRepositoryImpl(secureStorage);
+    final IDictionaryRepository dictionaryRepo =
+        DictionaryRepositoryImpl(EncryptedFileDataSource(secureStorage));
 
     final predictUseCase = PredictSignUseCase(signRepo);
     final calibrateUseCase = CalibrateSignUseCase(signRepo, predictUseCase);
