@@ -5,12 +5,15 @@ import 'package:provider/provider.dart';
 import 'core/di/app_providers.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/app_logger.dart';
+import 'core/utils/temp_media_sweeper.dart';
 import 'presentation/screens/main_scaffold.dart';
 
 List<CameraDescription> _cameras = [];
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // H-10: eliminar videos temporales huerfanos de sesiones anteriores (datos faciales).
+  await TempMediaSweeper.sweep();
   try {
     _cameras = await availableCameras();
   } catch (e) {

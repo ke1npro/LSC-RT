@@ -79,12 +79,20 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
           TextButton.icon(
             icon: const Icon(Icons.copy_rounded, size: 16),
             label: const Text('Copiar al portapapeles'),
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: jsonStr));
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: jsonStr));
+              // H-11 (M6/M9): los landmarks son biometricos; el portapapeles se limpia solo a los 30 s.
+              Future.delayed(const Duration(seconds: 30), () async {
+                final current = await Clipboard.getData(Clipboard.kTextPlain);
+                if (current?.text == jsonStr) {
+                  await Clipboard.setData(const ClipboardData(text: ''));
+                }
+              });
+              if (!ctx.mounted || !mounted) return;
               Navigator.of(ctx).pop();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Diccionario copiado al portapapeles'),
+                  content: Text('Copiado. El portapapeles se limpiará en 30 segundos.'),
                   backgroundColor: Color(0xFF00C853),
                 ),
               );
