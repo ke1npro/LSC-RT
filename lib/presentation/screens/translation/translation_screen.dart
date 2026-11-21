@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../domain/entities/body_pose.dart';
 import '../../../domain/entities/sign_prediction.dart';
+import '../../viewmodels/dictionary_viewmodel.dart';
 import '../../viewmodels/settings_viewmodel.dart';
 import '../../viewmodels/translation_viewmodel.dart';
 import '../../widgets/camera_viewport.dart';
@@ -39,6 +40,7 @@ class _TranslationScreenState extends State<TranslationScreen> {
     final controller = context.select<TranslationViewModel, CameraController?>((vm) => vm.cameraDataSource.controller);
     final isFrontCamera = context.select<TranslationViewModel, bool>((vm) => vm.isFrontCamera);
     final errorMessage = context.select<TranslationViewModel, String?>((vm) => vm.cameraErrorMessage);
+    final dictionaryCount = context.select<DictionaryViewModel, int>((d) => d.allSigns.length);
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -82,7 +84,9 @@ class _TranslationScreenState extends State<TranslationScreen> {
             right: 0,
             child: GlassTopBar(
               title: 'LSC RT',
-              subtitle: 'Traducción en Tiempo Real',
+              subtitle: dictionaryCount == 0
+                  ? 'Diccionario vacío (0 señas)'
+                  : 'Traducción desde tu Diccionario ($dictionaryCount)',
               isOnline: isInitialized,
               onSwitchCamera: () => translationVm.switchCamera(),
             ),
@@ -93,12 +97,19 @@ class _TranslationScreenState extends State<TranslationScreen> {
             bottom: 0,
             left: 0,
             right: 0,
-            child: Selector<TranslationViewModel, (SignPrediction?, bool, List<String>)>(
-              selector: (_, vm) => (vm.currentPrediction, vm.hasHand, vm.recentWords),
+            child: Selector2<TranslationViewModel, DictionaryViewModel,
+                (SignPrediction?, bool, List<String>, int)>(
+              selector: (_, vm, dict) => (
+                vm.currentPrediction,
+                vm.hasHand,
+                vm.recentWords,
+                dict.allSigns.length,
+              ),
               builder: (context, data, _) {
                 final prediction = data.$1;
                 final hasHand = data.$2;
                 final recentWords = data.$3;
+                final dictCount = data.$4;
 
                 return Center(
                   child: ConstrainedBox(
@@ -119,6 +130,7 @@ class _TranslationScreenState extends State<TranslationScreen> {
                             prediction: prediction,
                             hasHand: hasHand,
                             isCalibrationAvailable: false,
+                            isDictionaryEmpty: dictCount == 0,
                           ),
                         ],
                       ),

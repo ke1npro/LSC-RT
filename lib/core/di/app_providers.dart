@@ -21,6 +21,7 @@ import '../../domain/repositories/i_vision_repository.dart';
 import '../../domain/usecases/calibrate_sign_usecase.dart';
 import '../../domain/usecases/evaluate_recorded_sign_practice_usecase.dart';
 import '../../domain/usecases/predict_sign_usecase.dart';
+import '../../domain/usecases/recognize_dictionary_sign_usecase.dart';
 import '../../domain/usecases/resolve_body_pose_usecase.dart';
 import '../../domain/usecases/select_best_take_usecase.dart';
 import '../../presentation/viewmodels/avatar_viewmodel.dart';
@@ -81,11 +82,13 @@ class AppProviders {
           cameraDataSource: cameraDataSource,
           visionRepository: visionRepo,
           signRepository: signRepo,
+          dictionaryRepository: dictionaryRepo,
           settingsRepository: settingsRepo,
           ttsService: ttsService,
           predictSignUseCase: predictUseCase,
           calibrateSignUseCase: calibrateUseCase,
           resolveBodyPoseUseCase: ResolveBodyPoseUseCase(),
+          recognizeDictionarySignUseCase: RecognizeDictionarySignUseCase(dictionaryRepo),
         ),
       ),
       ChangeNotifierProvider<AvatarViewModel>(

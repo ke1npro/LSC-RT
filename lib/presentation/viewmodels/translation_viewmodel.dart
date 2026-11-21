@@ -7,24 +7,26 @@ import '../../domain/entities/body_pose.dart';
 import '../../domain/entities/face_bounds.dart';
 import '../../domain/entities/hand_pose.dart';
 import '../../domain/entities/sign_prediction.dart';
+import '../../domain/repositories/i_dictionary_repository.dart';
 import '../../domain/repositories/i_settings_repository.dart';
 import '../../domain/repositories/i_sign_repository.dart';
 import '../../domain/repositories/i_vision_repository.dart';
 import '../../domain/usecases/calibrate_sign_usecase.dart';
 import '../../domain/usecases/predict_sign_usecase.dart';
-import '../../domain/usecases/recognize_word_sign_usecase.dart';
+import '../../domain/usecases/recognize_dictionary_sign_usecase.dart';
 import '../../domain/usecases/resolve_body_pose_usecase.dart';
 
 class TranslationViewModel extends ChangeNotifier {
   final CameraDataSource cameraDataSource;
   final IVisionRepository visionRepository;
   final ISignRepository signRepository;
+  final IDictionaryRepository dictionaryRepository;
   final ISettingsRepository? settingsRepository;
   final ITtsService? ttsService;
   final PredictSignUseCase predictSignUseCase;
   final CalibrateSignUseCase calibrateSignUseCase;
   final ResolveBodyPoseUseCase resolveBodyPoseUseCase;
-  final RecognizeWordSignUseCase recognizeWordSignUseCase;
+  final RecognizeDictionarySignUseCase recognizeDictionarySignUseCase;
 
   StreamSubscription? _handSubscription;
   StreamSubscription? _faceSubscription;
@@ -52,14 +54,16 @@ class TranslationViewModel extends ChangeNotifier {
     required this.cameraDataSource,
     required this.visionRepository,
     required this.signRepository,
+    required this.dictionaryRepository,
     this.settingsRepository,
     this.ttsService,
     required this.predictSignUseCase,
     required this.calibrateSignUseCase,
     required this.resolveBodyPoseUseCase,
-    RecognizeWordSignUseCase? recognizeWordSignUseCase,
-  }) : recognizeWordSignUseCase =
-            recognizeWordSignUseCase ?? RecognizeWordSignUseCase();
+    RecognizeDictionarySignUseCase? recognizeDictionarySignUseCase,
+  }) : recognizeDictionarySignUseCase =
+            recognizeDictionarySignUseCase ??
+            RecognizeDictionarySignUseCase(dictionaryRepository);
 
   bool get isInitialized => _isInitialized;
   String get statusMessage => _statusMessage;
@@ -82,12 +86,17 @@ class TranslationViewModel extends ChangeNotifier {
       _calibrationBuffer.length / totalCalibrationSamples;
 
   int get calibratedSignsCount => signRepository.calibratedCount;
+  int get dictionarySignsCount => dictionaryRepository.allSigns.length;
+  bool get hasDictionarySigns => dictionaryRepository.allSigns.isNotEmpty;
 
   Future<void> initialize() async {
     _statusMessage = 'Cargando base de datos LSC...';
     notifyListeners();
 
     await signRepository.initialize();
+    if (!dictionaryRepository.isLoaded) {
+      await dictionaryRepository.initialize();
+    }
     await visionRepository.initialize();
     await ttsService?.initialize();
     visionRepository.setRotation(settingsRepository?.modelRotationDegrees ?? 270);
@@ -152,7 +161,7 @@ class TranslationViewModel extends ChangeNotifier {
   Future<void> switchCamera() async {
     if (cameraDataSource.cameras.length < 2 || cameraDataSource.isSwitching) return;
     resolveBodyPoseUseCase.reset();
-    recognizeWordSignUseCase.reset();
+    recognizeDictionarySignUseCase.reset();
     _currentPrediction = null;
     _currentPose = null;
     notifyListeners();
@@ -171,21 +180,18 @@ class TranslationViewModel extends ChangeNotifier {
 
     if (hands.isEmpty) {
       _currentPrediction = null;
-      recognizeWordSignUseCase.reset();
+      recognizeDictionarySignUseCase.reset();
     } else {
-      // 1. Prioridad: Clasificador de señas de palabras (Bimanuales y Unimanuales Core)
-      final wordPred = recognizeWordSignUseCase.execute(
-        hands: _rawHands,
-        pose: _currentPose,
-      );
+      // 1. Reconocimiento dinámico/postural basado únicamente en las señas del Diccionario
+      final dictPred = recognizeDictionarySignUseCase.execute(hands: _rawHands);
 
-      if (wordPred != null &&
-          wordPred.isRecognized &&
-          wordPred.confidence >= 0.70) {
-        _currentPrediction = wordPred;
-        _registerRecognizedWord(wordPred.label);
-      } else if (hands.length == 1) {
-        // 2. Detección de Letras del Abecedario (Dactilología individual estática)
+      if (dictPred != null &&
+          dictPred.isRecognized &&
+          dictPred.confidence >= 0.65) {
+        _currentPrediction = dictPred;
+        _registerRecognizedWord(dictPred.label);
+      } else if (hands.length == 1 && signRepository.hasCustomOverrides) {
+        // 2. Respaldo opcional para calibraciones manuales guardadas por el usuario
         final letterPred = predictSignUseCase.execute(hands.first);
         _currentPrediction = letterPred;
 
@@ -195,7 +201,7 @@ class TranslationViewModel extends ChangeNotifier {
           _registerRecognizedWord(letterPred.label);
         }
       } else {
-        _currentPrediction = wordPred;
+        _currentPrediction = dictPred;
       }
 
       // Si estuviera en modo calibración

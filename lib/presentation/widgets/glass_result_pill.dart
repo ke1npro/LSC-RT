@@ -6,12 +6,14 @@ class GlassResultPill extends StatelessWidget {
   final SignPrediction? prediction;
   final bool hasHand;
   final bool isCalibrationAvailable;
+  final bool isDictionaryEmpty;
 
   const GlassResultPill({
     super.key,
     required this.prediction,
     required this.hasHand,
     this.isCalibrationAvailable = false,
+    this.isDictionaryEmpty = false,
   });
 
   @override
@@ -71,11 +73,13 @@ class GlassResultPill extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      !hasHand
-                          ? 'Esperando mano...'
-                          : (prediction != null && prediction!.isRecognized)
-                              ? 'Seña Detectada'
-                              : 'Analizando postura...',
+                      (isDictionaryEmpty && !(prediction?.isRecognized ?? false))
+                          ? 'Diccionario vacío'
+                          : !hasHand
+                              ? 'Esperando mano...'
+                              : (prediction != null && prediction!.isRecognized)
+                                  ? 'Seña Detectada'
+                                  : 'Analizando postura...',
                       style: const TextStyle(
                         color: AppColors.textPrimary,
                         fontSize: 14,
@@ -108,9 +112,11 @@ class GlassResultPill extends StatelessWidget {
                         ),
                       ),
                     ] else ...[
-                      const Text(
-                        'Coloca tu mano frente a la cámara',
-                        style: TextStyle(
+                      Text(
+                        isDictionaryEmpty
+                            ? 'Graba tus señas en la pestaña Diccionario'
+                            : 'Coloca tu mano frente a la cámara',
+                        style: const TextStyle(
                           color: AppColors.textMuted,
                           fontSize: 11,
                         ),
