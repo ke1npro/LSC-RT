@@ -5,6 +5,7 @@ abstract class ISettingsRepository {
   int get modelRotationDegrees;
   bool get useGpuDelegate;
   bool get highPerformanceCamera;
+  bool get hasSeenOnboarding;
 
   Future<void> initialize();
   Future<void> setShowMediaPipeOverlay(bool value);
@@ -13,4 +14,5 @@ abstract class ISettingsRepository {
   Future<void> setModelRotationDegrees(int value);
   Future<void> setUseGpuDelegate(bool value);
   Future<void> setHighPerformanceCamera(bool value);
+  Future<void> setHasSeenOnboarding(bool value);
 }

@@ -10,6 +10,7 @@ class SettingsRepositoryImpl implements ISettingsRepository {
   static const String _keyModelRotation = 'model_rotation_degrees';
   static const String _keyUseGpu = 'use_gpu_delegate';
   static const String _keyHighPerfCamera = 'high_performance_camera';
+  static const String _keyHasSeenOnboarding = 'has_seen_onboarding';
 
   bool _showMediaPipeOverlay = true;
   bool _showFaceDetection = false;
@@ -17,6 +18,7 @@ class SettingsRepositoryImpl implements ISettingsRepository {
   int _modelRotationDegrees = 270; // Por defecto 270° para orientación vertical correcta sin inversión
   bool _useGpuDelegate = false;
   bool _highPerformanceCamera = true;
+  bool _hasSeenOnboarding = false;
 
   SettingsRepositoryImpl(this._localStorage);
 
@@ -39,6 +41,9 @@ class SettingsRepositoryImpl implements ISettingsRepository {
   bool get highPerformanceCamera => _highPerformanceCamera;
 
   @override
+  bool get hasSeenOnboarding => _hasSeenOnboarding;
+
+  @override
   Future<void> initialize() async {
     _showMediaPipeOverlay =
         (await _localStorage.getBool(_keyShowOverlay)) ?? true;
@@ -52,6 +57,8 @@ class SettingsRepositoryImpl implements ISettingsRepository {
         (await _localStorage.getBool(_keyUseGpu)) ?? false;
     _highPerformanceCamera =
         (await _localStorage.getBool(_keyHighPerfCamera)) ?? true;
+    _hasSeenOnboarding =
+        (await _localStorage.getBool(_keyHasSeenOnboarding)) ?? false;
   }
 
   @override
@@ -88,5 +95,11 @@ class SettingsRepositoryImpl implements ISettingsRepository {
   Future<void> setHighPerformanceCamera(bool value) async {
     _highPerformanceCamera = value;
     await _localStorage.setBool(_keyHighPerfCamera, value);
+  }
+
+  @override
+  Future<void> setHasSeenOnboarding(bool value) async {
+    _hasSeenOnboarding = value;
+    await _localStorage.setBool(_keyHasSeenOnboarding, value);
   }
 }

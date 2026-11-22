@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../domain/repositories/i_vision_repository.dart';
 import '../../viewmodels/settings_viewmodel.dart';
 import '../../widgets/glass_top_bar.dart';
+import '../tutorial/interactive_tutorial_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -349,7 +350,37 @@ class SettingsScreen extends StatelessWidget {
 
                 const SizedBox(height: 28),
 
-                // SECCIÓN 5: INFORMACIÓN DEL SISTEMA
+                // SECCIÓN 5: AYUDA Y TUTORIAL
+                _buildSectionHeader('AYUDA Y TUTORIAL'),
+                const SizedBox(height: 10),
+                _buildCard([
+                  ListTile(
+                    leading: const Icon(Icons.menu_book_rounded,
+                        color: AppColors.cyanAccent, size: 22),
+                    title: const Text(
+                      'Ver tutorial interactivo',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'Recorre paso a paso cómo grabar, traducir y practicar tus señas.',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded,
+                        color: AppColors.textSecondary),
+                    onTap: () => InteractiveTutorialScreen.show(context),
+                  ),
+                ]),
+
+                const SizedBox(height: 28),
+
+                // SECCIÓN 6: INFORMACIÓN DEL SISTEMA
                 _buildSectionHeader('INFORMACIÓN DEL SISTEMA'),
                 const SizedBox(height: 10),
                 _buildCard([

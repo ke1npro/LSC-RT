@@ -17,6 +17,9 @@ class SettingsViewModel extends ChangeNotifier {
     BiometricAuthService? biometricService,
   ]) : _biometricService = biometricService ?? BiometricAuthService();
 
+  bool _isInitialized = false;
+
+  bool get isInitialized => _isInitialized;
   bool get showMediaPipeOverlay => _settingsRepository.showMediaPipeOverlay;
   bool get showFaceDetection => _settingsRepository.showFaceDetection;
   bool get showTeachingMediaPipeOverlay =>
@@ -24,6 +27,7 @@ class SettingsViewModel extends ChangeNotifier {
   int get modelRotationDegrees => _settingsRepository.modelRotationDegrees;
   bool get useGpuDelegate => _settingsRepository.useGpuDelegate;
   bool get highPerformanceCamera => _settingsRepository.highPerformanceCamera;
+  bool get hasSeenOnboarding => _settingsRepository.hasSeenOnboarding;
 
   // Estado del Dataset y Overrides
   int get factorySignsCount => _signRepository.factorySignsCount;
@@ -36,6 +40,7 @@ class SettingsViewModel extends ChangeNotifier {
     _visionRepository?.setFaceDetectionEnabled(_settingsRepository.showFaceDetection);
     _visionRepository?.setRotation(_settingsRepository.modelRotationDegrees);
     _visionRepository?.setUseGpu(_settingsRepository.useGpuDelegate);
+    _isInitialized = true;
     notifyListeners();
   }
 
@@ -69,6 +74,11 @@ class SettingsViewModel extends ChangeNotifier {
 
   Future<void> setHighPerformanceCamera(bool value) async {
     await _settingsRepository.setHighPerformanceCamera(value);
+    notifyListeners();
+  }
+
+  Future<void> markOnboardingSeen() async {
+    await _settingsRepository.setHasSeenOnboarding(true);
     notifyListeners();
   }
 
