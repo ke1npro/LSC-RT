@@ -28,6 +28,7 @@ import '../../presentation/viewmodels/avatar_viewmodel.dart';
 import '../../presentation/viewmodels/dictionary_viewmodel.dart';
 import '../../presentation/viewmodels/settings_viewmodel.dart';
 import '../../presentation/viewmodels/sign_recorder_viewmodel.dart';
+import '../../presentation/viewmodels/step_conversation_viewmodel.dart';
 import '../../presentation/viewmodels/teaching_viewmodel.dart';
 import '../../presentation/viewmodels/translation_viewmodel.dart';
 
@@ -89,6 +90,14 @@ class AppProviders {
           calibrateSignUseCase: calibrateUseCase,
           resolveBodyPoseUseCase: ResolveBodyPoseUseCase(),
           recognizeDictionarySignUseCase: RecognizeDictionarySignUseCase(dictionaryRepo),
+        ),
+      ),
+      ChangeNotifierProvider<StepConversationViewModel>(
+        create: (_) => StepConversationViewModel(
+          cameraDataSource: cameraDataSource,
+          videoDataSource: videoDataSource,
+          dictionaryRepository: dictionaryRepo,
+          ttsService: ttsService,
         ),
       ),
       ChangeNotifierProvider<AvatarViewModel>(

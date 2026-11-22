@@ -152,6 +152,22 @@ class TranslationViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> pauseLiveMode() async {
+    await _handSubscription?.cancel();
+    _handSubscription = null;
+    await _faceSubscription?.cancel();
+    _faceSubscription = null;
+    resolveBodyPoseUseCase.reset();
+    recognizeDictionarySignUseCase.reset();
+    _currentPrediction = null;
+    _currentPose = null;
+    _rawHands = [];
+    _rawFaces = [];
+    _isInitialized = false;
+    await cameraDataSource.disposeCamera();
+    notifyListeners();
+  }
+
   void setViewportSize(Size size) {
     if (_viewportSize == size) return;
     _viewportSize = size;

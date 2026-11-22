@@ -6,11 +6,15 @@ import '../../../domain/entities/body_pose.dart';
 import '../../../domain/entities/sign_prediction.dart';
 import '../../viewmodels/dictionary_viewmodel.dart';
 import '../../viewmodels/settings_viewmodel.dart';
+import '../../viewmodels/step_conversation_viewmodel.dart';
 import '../../viewmodels/translation_viewmodel.dart';
 import '../../widgets/camera_viewport.dart';
 import '../../widgets/glass_result_pill.dart';
 import '../../widgets/glass_top_bar.dart';
 import '../../widgets/painters/body_pose_painter.dart';
+import 'widgets/step_conversation_view.dart';
+
+enum _TranslationUiMode { stepByStep, live }
 
 class TranslationScreen extends StatefulWidget {
   const TranslationScreen({super.key});
@@ -20,27 +24,83 @@ class TranslationScreen extends StatefulWidget {
 }
 
 class _TranslationScreenState extends State<TranslationScreen> {
+  _TranslationUiMode _uiMode = _TranslationUiMode.stepByStep;
+  bool _isSwitchingMode = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final vm = context.read<TranslationViewModel>();
-      if (!vm.isInitialized) {
-        vm.initialize();
-      }
+      if (!mounted) return;
+      context.read<StepConversationViewModel>().enterMode();
     });
+  }
+
+  Future<void> _switchMode(_TranslationUiMode nextMode) async {
+    if (_uiMode == nextMode || _isSwitchingMode) return;
+    setState(() {
+      _isSwitchingMode = true;
+      _uiMode = nextMode;
+    });
+
+    final stepVm = context.read<StepConversationViewModel>();
+    final liveVm = context.read<TranslationViewModel>();
+
+    try {
+      if (nextMode == _TranslationUiMode.live) {
+        await stepVm.leaveMode();
+        if (!mounted) return;
+        await liveVm.initialize();
+      } else {
+        await liveVm.pauseLiveMode();
+        if (!mounted) return;
+        await stepVm.enterMode();
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSwitchingMode = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final dictionaryCount =
+        context.select<DictionaryViewModel, int>((d) => d.allSigns.length);
+
+    if (_uiMode == _TranslationUiMode.stepByStep) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: Column(
+          children: [
+            GlassTopBar(
+              title: 'Conversación LSC',
+              subtitle: dictionaryCount == 0
+                  ? 'Diccionario vacío (0 señas)'
+                  : 'Modo Paso a Paso offline ($dictionaryCount señas)',
+              isOnline: true,
+            ),
+            const SizedBox(height: 8),
+            _buildModeToggle(),
+            const Expanded(child: StepConversationView()),
+          ],
+        ),
+      );
+    }
+
     final translationVm = context.read<TranslationViewModel>();
-    final isInitialized = context.select<TranslationViewModel, bool>((vm) => vm.isInitialized);
-    final isSwitching = context.select<TranslationViewModel, bool>((vm) => vm.isCameraSwitching);
-    final isPermissionDenied = context.select<TranslationViewModel, bool>((vm) => vm.isCameraPermissionDenied);
-    final controller = context.select<TranslationViewModel, CameraController?>((vm) => vm.cameraDataSource.controller);
-    final isFrontCamera = context.select<TranslationViewModel, bool>((vm) => vm.isFrontCamera);
-    final errorMessage = context.select<TranslationViewModel, String?>((vm) => vm.cameraErrorMessage);
-    final dictionaryCount = context.select<DictionaryViewModel, int>((d) => d.allSigns.length);
+    final isInitialized =
+        context.select<TranslationViewModel, bool>((vm) => vm.isInitialized);
+    final isSwitching = context
+        .select<TranslationViewModel, bool>((vm) => vm.isCameraSwitching);
+    final isPermissionDenied = context.select<TranslationViewModel, bool>(
+        (vm) => vm.isCameraPermissionDenied);
+    final controller = context.select<TranslationViewModel, CameraController?>(
+        (vm) => vm.cameraDataSource.controller);
+    final isFrontCamera =
+        context.select<TranslationViewModel, bool>((vm) => vm.isFrontCamera);
+    final errorMessage = context
+        .select<TranslationViewModel, String?>((vm) => vm.cameraErrorMessage);
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -66,8 +126,10 @@ class _TranslationScreenState extends State<TranslationScreen> {
                       size: Size.infinite,
                       painter: BodyPosePainter(
                         pose: currentPose,
-                        showOverlay: context.select<SettingsViewModel, bool>((s) => s.showMediaPipeOverlay),
-                        showFace: context.select<SettingsViewModel, bool>((s) => s.showFaceDetection),
+                        showOverlay: context.select<SettingsViewModel, bool>(
+                            (s) => s.showMediaPipeOverlay),
+                        showFace: context.select<SettingsViewModel, bool>(
+                            (s) => s.showFaceDetection),
                         isMirrored: isFrontCamera,
                       ),
                     ),
@@ -77,18 +139,25 @@ class _TranslationScreenState extends State<TranslationScreen> {
             ),
           ),
 
-          // 2. Barra Superior Flotante Glassmorphism
+          // 2. Barra Superior Flotante Glassmorphism + Selector de Modo
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            child: GlassTopBar(
-              title: 'LSC RT',
-              subtitle: dictionaryCount == 0
-                  ? 'Diccionario vacío (0 señas)'
-                  : 'Traducción desde tu Diccionario ($dictionaryCount)',
-              isOnline: isInitialized,
-              onSwitchCamera: () => translationVm.switchCamera(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GlassTopBar(
+                  title: 'LSC RT',
+                  subtitle: dictionaryCount == 0
+                      ? 'Diccionario vacío (0 señas)'
+                      : 'Traducción desde tu Diccionario ($dictionaryCount)',
+                  isOnline: isInitialized,
+                  onSwitchCamera: () => translationVm.switchCamera(),
+                ),
+                const SizedBox(height: 8),
+                _buildModeToggle(),
+              ],
             ),
           ),
 
@@ -119,13 +188,10 @@ class _TranslationScreenState extends State<TranslationScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Historial de las últimas 5 palabras reconocidas
                           if (recentWords.isNotEmpty) ...[
                             _buildRecentWordsRibbon(recentWords),
                             const SizedBox(height: 10),
                           ],
-
-                          // Pastilla principal de resultado
                           GlassResultPill(
                             prediction: prediction,
                             hasHand: hasHand,
@@ -141,6 +207,76 @@ class _TranslationScreenState extends State<TranslationScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildModeToggle() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: const Color(0xF2121727),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.glassBorder),
+        ),
+        child: Row(
+          children: [
+            _buildModeSegment(
+              label: 'Paso a Paso',
+              icon: Icons.chat_bubble_outline_rounded,
+              selected: _uiMode == _TranslationUiMode.stepByStep,
+              onTap: () => _switchMode(_TranslationUiMode.stepByStep),
+            ),
+            _buildModeSegment(
+              label: 'En Vivo',
+              icon: Icons.sensors_rounded,
+              selected: _uiMode == _TranslationUiMode.live,
+              onTap: () => _switchMode(_TranslationUiMode.live),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModeSegment({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.cyanAccent : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: selected ? Colors.black : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected ? Colors.black : AppColors.textSecondary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
