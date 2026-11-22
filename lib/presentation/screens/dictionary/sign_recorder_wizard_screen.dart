@@ -50,6 +50,51 @@ class _SignRecorderWizardScreenState extends State<SignRecorderWizardScreen> {
   }
 
   void _handleSave(SignRecorderViewModel vm) async {
+    final similarity = vm.similarityReport;
+    if (similarity != null && similarity.hasHighSimilarity) {
+      final closest = similarity.closestMatch!;
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF161B2E),
+          title: Text(
+            similarity.isDuplicate
+                ? '¿Guardar seña duplicada?'
+                : '¿Guardar seña similar?',
+            style: const TextStyle(color: Colors.white),
+          ),
+          content: Text(
+            'Esta grabación tiene ${closest.similarityPercent}% de similitud con "${closest.existingSign.word}". '
+            'Guardar señas muy parecidas puede causar confusiones al traducir en vivo.\n\n'
+            '¿Deseas guardarla de todas formas o cancelar para grabar/recortar otra toma?',
+            style: const TextStyle(color: AppColors.textSecondary, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(color: AppColors.cyanAccent),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor:
+                    similarity.isDuplicate ? Colors.redAccent : Colors.amber,
+                foregroundColor: Colors.black,
+              ),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text(
+                'Guardar de todas formas',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true || !mounted) return;
+    }
+
     final savedSign = await vm.finishAndSave();
     if (savedSign == null || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -629,6 +674,8 @@ class _SignRecorderWizardScreenState extends State<SignRecorderWizardScreen> {
   // PASO 5: RESUMEN Y SELECCIÓN DE MEJOR MUESTRA (1 A 5 TOMAS)
   Widget _buildTakesSummaryStep(BuildContext context, SignRecorderViewModel vm) {
     final eval = vm.bestEvaluation;
+    final similarity = vm.similarityReport;
+    final closest = similarity?.closestMatch;
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -756,6 +803,104 @@ class _SignRecorderWizardScreenState extends State<SignRecorderWizardScreen> {
               ],
             ),
           ),
+        ],
+
+        if (similarity != null && closest != null) ...[
+          const SizedBox(height: 12),
+          if (similarity.hasHighSimilarity)
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: (similarity.isDuplicate
+                        ? Colors.deepOrangeAccent
+                        : Colors.amber)
+                    .withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: similarity.isDuplicate
+                      ? Colors.deepOrangeAccent
+                      : Colors.amber,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    similarity.isDuplicate
+                        ? Icons.content_copy_rounded
+                        : Icons.warning_amber_rounded,
+                    color: similarity.isDuplicate
+                        ? Colors.deepOrangeAccent
+                        : Colors.amber,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          similarity.isDuplicate
+                              ? 'Posible seña duplicada'
+                              : 'Seña muy similar detectada',
+                          style: TextStyle(
+                            color: similarity.isDuplicate
+                                ? Colors.deepOrangeAccent
+                                : Colors.amber,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        ...similarity.highSimilarityMatches.take(3).map(
+                              (m) => Text(
+                                '- ${m.existingSign.word}: ${m.similarityPercent}% de similitud',
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Señas muy parecidas pueden confundirse durante la traducción en vivo.',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00E676).withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: const Color(0xFF00E676).withValues(alpha: 0.45),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.verified_rounded,
+                      color: Color(0xFF00E676), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Buena diferenciación. Máxima similitud con tu diccionario: ${closest.similarityPercent}% (${closest.existingSign.word}).',
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
 
         const SizedBox(height: 24),

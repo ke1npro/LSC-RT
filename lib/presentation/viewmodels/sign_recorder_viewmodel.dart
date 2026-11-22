@@ -8,6 +8,7 @@ import '../../data/datasources/video_landmarker_datasource.dart';
 import '../../domain/entities/recorded_sign.dart';
 import '../../domain/entities/sign_take_candidate.dart';
 import '../../domain/repositories/i_dictionary_repository.dart';
+import '../../domain/usecases/check_sign_similarity_usecase.dart';
 import '../../domain/usecases/select_best_take_usecase.dart';
 
 enum WizardStep {
@@ -25,13 +26,17 @@ class SignRecorderViewModel extends ChangeNotifier {
   final VideoLandmarkerDataSource videoDataSource;
   final IDictionaryRepository dictionaryRepository;
   final SelectBestTakeUseCase selectBestTakeUseCase;
+  final CheckSignSimilarityUseCase checkSignSimilarityUseCase;
 
   SignRecorderViewModel({
     required this.cameraDataSource,
     required this.videoDataSource,
     required this.dictionaryRepository,
     SelectBestTakeUseCase? selectBestTakeUseCase,
-  }) : selectBestTakeUseCase = selectBestTakeUseCase ?? SelectBestTakeUseCase();
+    CheckSignSimilarityUseCase? checkSignSimilarityUseCase,
+  })  : selectBestTakeUseCase = selectBestTakeUseCase ?? SelectBestTakeUseCase(),
+        checkSignSimilarityUseCase =
+            checkSignSimilarityUseCase ?? CheckSignSimilarityUseCase();
 
   WizardStep _step = WizardStep.setup;
   String _word = '';
@@ -57,6 +62,7 @@ class SignRecorderViewModel extends ChangeNotifier {
   // Status & Errors
   bool _isBusy = false;
   String? _errorMessage;
+  SignSimilarityReport? _similarityReport;
 
   WizardStep get step => _step;
   String get word => _word;
@@ -76,6 +82,7 @@ class SignRecorderViewModel extends ChangeNotifier {
   int get totalProcessingFrames => _totalProcessingFrames;
   bool get isBusy => _isBusy;
   String? get errorMessage => _errorMessage;
+  SignSimilarityReport? get similarityReport => _similarityReport;
 
   BestTakeEvaluationResult? get bestEvaluation {
     if (_takes.isEmpty) return null;
@@ -97,6 +104,7 @@ class SignRecorderViewModel extends ChangeNotifier {
     _takes.clear();
     _activeTakeIndex = 0;
     _errorMessage = null;
+    _similarityReport = null;
     notifyListeners();
   }
 
@@ -246,8 +254,22 @@ class SignRecorderViewModel extends ChangeNotifier {
   }
 
   void viewTakesSummary() {
+    _recomputeSimilarityReport();
     _step = WizardStep.takesSummary;
     notifyListeners();
+  }
+
+  void _recomputeSimilarityReport() {
+    final winner = bestEvaluation?.winner;
+    if (winner == null) {
+      _similarityReport = null;
+      return;
+    }
+    _similarityReport = checkSignSimilarityUseCase.execute(
+      candidateFrames: winner.trimmedFrames,
+      requiredHands: _requiredHands,
+      existingSigns: dictionaryRepository.allSigns,
+    );
   }
 
   void selectTakeForReview(int index) {
@@ -313,6 +335,7 @@ class SignRecorderViewModel extends ChangeNotifier {
       _step = WizardStep.setup;
       _takes.clear();
       _activeTakeIndex = 0;
+      _similarityReport = null;
       return sign;
     } catch (e) {
       AppLogger.e('SignRecorderViewModel: Error guardando seña', e);
@@ -334,6 +357,7 @@ class SignRecorderViewModel extends ChangeNotifier {
     _takes.clear();
     _activeTakeIndex = 0;
     _errorMessage = null;
+    _similarityReport = null;
     notifyListeners();
   }
 
