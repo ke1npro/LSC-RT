@@ -192,6 +192,18 @@ class TeachingViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Libera cámara y temporizadores al salir de la pestaña Enseñanza.
+  Future<void> leaveTab() async {
+    _stopDemoLoop();
+    await _cleanupPracticeSession();
+    if (_mode != TeachingMode.catalog) {
+      _selectedSign = null;
+      _mode = TeachingMode.catalog;
+      _errorMessage = null;
+      notifyListeners();
+    }
+  }
+
   Future<void> backToDemonstration() async {
     await _cleanupPracticeSession();
     _mode = TeachingMode.demonstration;

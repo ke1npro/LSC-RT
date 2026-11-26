@@ -4,15 +4,20 @@ import '../../core/theme/avatar_theme.dart';
 import '../../core/utils/security_input_validator.dart';
 import '../../data/datasources/avatar_motion_datasource.dart';
 import '../../domain/entities/avatar_sign_data.dart';
+import '../../domain/repositories/i_dictionary_repository.dart';
+import '../../domain/services/sign_frame_avatar_adapter.dart';
+import '../../domain/usecases/resolve_body_pose_usecase.dart';
 
 class AvatarViewModel extends ChangeNotifier {
   final AvatarMotionDataSource motionDataSource;
+  final IDictionaryRepository? dictionaryRepository;
 
   bool _isInitialized = false;
   bool _isRefreshing = false;
   String _selectedCategory = 'Todos';
   String _searchQuery = '';
   final List<AvatarSignData> _sentenceSequence = [];
+  List<AvatarSignData> _dictionaryAvatarSigns = [];
 
   // Estado de reproducción cinemática
   List<AvatarFrame> _playbackFrames = [];
@@ -29,7 +34,10 @@ class AvatarViewModel extends ChangeNotifier {
   // Tema del Avatar
   AvatarTheme _theme = AvatarTheme.neon();
 
-  AvatarViewModel(this.motionDataSource);
+  AvatarViewModel(
+    this.motionDataSource, {
+    this.dictionaryRepository,
+  });
 
   bool get isInitialized => _isInitialized;
   bool get isRefreshing => _isRefreshing;
@@ -41,6 +49,15 @@ class AvatarViewModel extends ChangeNotifier {
   int get totalFrames => _playbackFrames.length;
   double get playbackSpeed => _playbackSpeed;
   AvatarTheme get theme => _theme;
+
+  /// Tema efectivo para la palabra actualmente en reproducción (ajusta relación de aspecto).
+  AvatarTheme get currentFrameTheme {
+    if (_sentenceSequence.isEmpty) return _theme;
+    final idx = currentWordIndex.clamp(0, _sentenceSequence.length - 1);
+    final aspect = _sentenceSequence[idx].sourceAspect;
+    if (aspect == null) return _theme;
+    return _theme.copyWith(sourceAspect: aspect);
+  }
   List<Offset> get rightHandTrail => List.unmodifiable(_rightHandTrail);
   List<Offset> get leftHandTrail => List.unmodifiable(_leftHandTrail);
 
@@ -73,20 +90,27 @@ class AvatarViewModel extends ChangeNotifier {
   Future<void> initialize() async {
     if (_isInitialized) return;
     await motionDataSource.initialize();
+    if (dictionaryRepository != null && !dictionaryRepository!.isLoaded) {
+      await dictionaryRepository!.initialize();
+    }
+    _rebuildDictionarySigns();
     _isInitialized = true;
     notifyListeners();
   }
 
-  /// Recarga el catálogo del banco de señas del avatar y actualiza la vista.
+  /// Recarga el catálogo del banco de señas y el diccionario del usuario.
   Future<void> refresh() async {
     if (_isRefreshing) return;
     _isRefreshing = true;
     notifyListeners();
     try {
       await motionDataSource.refresh();
-      _isInitialized = motionDataSource.isLoaded;
-      if (_selectedCategory != 'Todos' &&
-          !motionDataSource.getCategories().contains(_selectedCategory)) {
+      if (dictionaryRepository != null && !dictionaryRepository!.isLoaded) {
+        await dictionaryRepository!.initialize();
+      }
+      _rebuildDictionarySigns();
+      _isInitialized = motionDataSource.isLoaded || _dictionaryAvatarSigns.isNotEmpty;
+      if (_selectedCategory != 'Todos' && !categories.contains(_selectedCategory)) {
         _selectedCategory = 'Todos';
       }
       _preparePlaybackFrames();
@@ -96,13 +120,35 @@ class AvatarViewModel extends ChangeNotifier {
     }
   }
 
+  void _rebuildDictionarySigns() {
+    final repo = dictionaryRepository;
+    if (repo == null) {
+      _dictionaryAvatarSigns = const [];
+      return;
+    }
+    final poseUseCase = ResolveBodyPoseUseCase();
+    _dictionaryAvatarSigns = repo.allSigns
+        .where((s) => s.frames.isNotEmpty)
+        .map((s) => SignFrameAvatarAdapter.toAvatarSignData(s, poseUseCase))
+        .toList(growable: false);
+  }
+
+  List<AvatarSignData> get _allCombinedSigns {
+    if (_dictionaryAvatarSigns.isEmpty) return motionDataSource.allSigns;
+    return [..._dictionaryAvatarSigns, ...motionDataSource.allSigns];
+  }
+
   List<String> get categories {
-    final cats = ['Todos', ...motionDataSource.getCategories()];
-    return cats;
+    final set = <String>{
+      ...motionDataSource.getCategories(),
+      ..._dictionaryAvatarSigns.map((s) => s.category),
+    };
+    final sorted = set.toList()..sort();
+    return ['Todos', ...sorted];
   }
 
   List<AvatarSignData> get filteredSigns {
-    var signs = motionDataSource.allSigns;
+    var signs = _allCombinedSigns;
     if (_selectedCategory != 'Todos') {
       signs = signs.where((s) => s.category == _selectedCategory).toList();
     }

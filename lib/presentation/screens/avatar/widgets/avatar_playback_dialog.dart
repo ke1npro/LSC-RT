@@ -176,7 +176,7 @@ class AvatarPlaybackDialog extends StatelessWidget {
                                   size: Size.infinite,
                                   painter: AvatarPosePainter(
                                     frame: viewModel.currentFrame,
-                                    theme: viewModel.theme,
+                                    theme: viewModel.currentFrameTheme,
                                     rightHandTrail: viewModel.rightHandTrail,
                                     leftHandTrail: viewModel.leftHandTrail,
                                   ),

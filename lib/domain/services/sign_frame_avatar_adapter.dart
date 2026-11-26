@@ -19,6 +19,39 @@ class SignFrameAvatarAdapter {
     height: 0.16,
   );
 
+  /// Convierte una seña grabada del diccionario ([RecordedSign]) en [AvatarSignData].
+  static AvatarSignData toAvatarSignData(
+    RecordedSign sign,
+    ResolveBodyPoseUseCase poseUseCase,
+  ) {
+    poseUseCase.reset();
+    final avatarFrames = sign.frames
+        .map((frame) => toAvatarFrame(frame, poseUseCase))
+        .toList(growable: false);
+
+    return AvatarSignData(
+      id: sign.id,
+      signId: sign.id,
+      displayName: sign.word,
+      category: sign.category,
+      type: sign.isBimanual ? 'BIMANUAL' : 'UNIMANUAL',
+      totalFrames: avatarFrames.length,
+      fps: sign.fps > 0 ? sign.fps : 20.0,
+      durationSeconds: sign.durationMs / 1000.0,
+      apexFrame: avatarFrames.isEmpty ? 0 : avatarFrames.length ~/ 2,
+      pedagogicalMetadata: const PedagogicalMetadata(
+        description: 'Seña grabada en tu diccionario personal.',
+        instructions: 'Reproduce la secuencia capturada en el diccionario.',
+        handshapeDescription: 'Configuración capturada.',
+        movementDescription: 'Movimiento grabado.',
+        locationDescription: 'Espacio frontal.',
+      ),
+      frames: avatarFrames,
+      sourceAspect: portraitSourceAspect,
+      isFromDictionary: true,
+    );
+  }
+
   /// Construye un [AvatarFrame] a partir de [frame] usando [poseUseCase]
   /// en un lienzo canónico vertical 9:16.
   static AvatarFrame toAvatarFrame(

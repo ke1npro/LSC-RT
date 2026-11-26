@@ -103,7 +103,10 @@ class AppProviders {
         ),
       ),
       ChangeNotifierProvider<AvatarViewModel>(
-        create: (_) => AvatarViewModel(avatarDataSource)..initialize(),
+        create: (_) => AvatarViewModel(
+          avatarDataSource,
+          dictionaryRepository: dictionaryRepo,
+        )..initialize(),
       ),
       ChangeNotifierProvider<TeachingViewModel>(
         create: (_) => TeachingViewModel(

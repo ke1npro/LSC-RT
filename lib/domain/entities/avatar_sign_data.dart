@@ -116,6 +116,8 @@ class AvatarSignData {
   final int apexFrame;
   final PedagogicalMetadata pedagogicalMetadata;
   final List<AvatarFrame> frames;
+  final double? sourceAspect;
+  final bool isFromDictionary;
 
   const AvatarSignData({
     required this.id,
@@ -129,6 +131,8 @@ class AvatarSignData {
     required this.apexFrame,
     required this.pedagogicalMetadata,
     required this.frames,
+    this.sourceAspect,
+    this.isFromDictionary = false,
   });
 
   bool get isBimanual => type.toUpperCase() == 'BIMANUAL';

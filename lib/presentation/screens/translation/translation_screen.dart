@@ -17,7 +17,9 @@ import 'widgets/step_conversation_view.dart';
 enum _TranslationUiMode { stepByStep, live }
 
 class TranslationScreen extends StatefulWidget {
-  const TranslationScreen({super.key});
+  final bool isActiveTab;
+
+  const TranslationScreen({super.key, this.isActiveTab = true});
 
   @override
   State<TranslationScreen> createState() => _TranslationScreenState();
@@ -31,9 +33,39 @@ class _TranslationScreenState extends State<TranslationScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || !widget.isActiveTab) return;
       context.read<StepConversationViewModel>().enterMode();
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant TranslationScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isActiveTab != widget.isActiveTab) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _syncTabVisibility(widget.isActiveTab);
+      });
+    }
+  }
+
+  Future<void> _syncTabVisibility(bool active) async {
+    final stepVm = context.read<StepConversationViewModel>();
+    final liveVm = context.read<TranslationViewModel>();
+    if (!active) {
+      await stepVm.leaveMode();
+      await liveVm.pauseLiveMode();
+      return;
+    }
+    if (_uiMode == _TranslationUiMode.stepByStep) {
+      await liveVm.pauseLiveMode();
+      if (!mounted || !widget.isActiveTab) return;
+      await stepVm.enterMode();
+    } else {
+      await stepVm.leaveMode();
+      if (!mounted || !widget.isActiveTab) return;
+      await liveVm.initialize();
+    }
   }
 
   Future<void> _switchMode(_TranslationUiMode nextMode) async {

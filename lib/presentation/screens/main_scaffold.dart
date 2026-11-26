@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../viewmodels/avatar_viewmodel.dart';
 import '../viewmodels/settings_viewmodel.dart';
+import '../viewmodels/teaching_viewmodel.dart';
 import 'avatar/avatar_screen.dart';
 import 'dictionary/dictionary_screen.dart';
 import 'settings/settings_screen.dart';
@@ -22,13 +24,31 @@ class _MainScaffoldState extends State<MainScaffold> {
   bool _onboardingChecked = false;
   SettingsViewModel? _settingsVm;
 
-  final List<Widget> _screens = const [
-    DictionaryScreen(),
-    TranslationScreen(),
-    AvatarScreen(),
-    TeachingScreen(),
-    SettingsScreen(),
-  ];
+  List<Widget> _buildScreens() => [
+        const DictionaryScreen(),
+        TranslationScreen(isActiveTab: _currentIndex == 1),
+        const AvatarScreen(),
+        const TeachingScreen(),
+        const SettingsScreen(),
+      ];
+
+  void _onTabSelected(int index) {
+    if (index == _currentIndex) return;
+    final previous = _currentIndex;
+    if (previous == 2) {
+      context.read<AvatarViewModel>().stop();
+    } else if (previous == 3) {
+      context.read<TeachingViewModel>().leaveTab();
+    }
+
+    setState(() => _currentIndex = index);
+
+    if (index == 2) {
+      context.read<AvatarViewModel>().refresh();
+    } else if (index == 3) {
+      context.read<TeachingViewModel>().refreshCatalog();
+    }
+  }
 
   @override
   void initState() {
@@ -77,7 +97,7 @@ class _MainScaffoldState extends State<MainScaffold> {
       backgroundColor: AppColors.background,
       body: IndexedStack(
         index: _currentIndex,
-        children: _screens,
+        children: _buildScreens(),
       ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
@@ -91,9 +111,7 @@ class _MainScaffoldState extends State<MainScaffold> {
           child: NavigationBar(
             selectedIndex: _currentIndex,
             labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-            onDestinationSelected: (index) {
-              setState(() => _currentIndex = index);
-            },
+            onDestinationSelected: _onTabSelected,
             destinations: const [
               NavigationDestination(
                 icon: Icon(Icons.menu_book_outlined),
