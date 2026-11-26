@@ -47,12 +47,16 @@ class VideoLandmarkerDataSource {
   /// Procesa un archivo de video local offline con MediaPipe HandLandmarker (RunningMode.VIDEO).
   Future<List<SignFrameLandmarks>> processVideo({
     required String videoPath,
-    double fps = 30.0,
+    double fps = 20.0,
+    int maxDimension = 360,
+    bool useGpu = false,
   }) async {
     try {
       final dynamic raw = await _methodChannel.invokeMethod('processVideo', {
         'videoPath': videoPath,
         'fps': fps,
+        'maxDimension': maxDimension,
+        'useGpu': useGpu,
       });
 
       if (raw is! List) {

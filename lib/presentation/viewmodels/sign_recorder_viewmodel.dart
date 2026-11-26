@@ -2,12 +2,14 @@ import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
+import '../../core/config/offline_video_config.dart';
 import '../../core/utils/app_logger.dart';
 import '../../data/datasources/camera_datasource.dart';
 import '../../data/datasources/video_landmarker_datasource.dart';
 import '../../domain/entities/recorded_sign.dart';
 import '../../domain/entities/sign_take_candidate.dart';
 import '../../domain/repositories/i_dictionary_repository.dart';
+import '../../domain/repositories/i_settings_repository.dart';
 import '../../domain/usecases/check_sign_similarity_usecase.dart';
 import '../../domain/usecases/select_best_take_usecase.dart';
 
@@ -25,6 +27,7 @@ class SignRecorderViewModel extends ChangeNotifier {
   final CameraDataSource cameraDataSource;
   final VideoLandmarkerDataSource videoDataSource;
   final IDictionaryRepository dictionaryRepository;
+  final ISettingsRepository? settingsRepository;
   final SelectBestTakeUseCase selectBestTakeUseCase;
   final CheckSignSimilarityUseCase checkSignSimilarityUseCase;
 
@@ -32,6 +35,7 @@ class SignRecorderViewModel extends ChangeNotifier {
     required this.cameraDataSource,
     required this.videoDataSource,
     required this.dictionaryRepository,
+    this.settingsRepository,
     SelectBestTakeUseCase? selectBestTakeUseCase,
     CheckSignSimilarityUseCase? checkSignSimilarityUseCase,
   })  : selectBestTakeUseCase = selectBestTakeUseCase ?? SelectBestTakeUseCase(),
@@ -57,6 +61,7 @@ class SignRecorderViewModel extends ChangeNotifier {
   double _processingPercent = 0.0;
   int _processedFrames = 0;
   int _totalProcessingFrames = 0;
+  double _lastProcessedFps = 20.0;
   StreamSubscription<VideoProgressUpdate>? _progressSubscription;
 
   // Status & Errors
@@ -83,6 +88,40 @@ class SignRecorderViewModel extends ChangeNotifier {
   bool get isBusy => _isBusy;
   String? get errorMessage => _errorMessage;
   SignSimilarityReport? get similarityReport => _similarityReport;
+  double get lastProcessedFps => _lastProcessedFps;
+
+  /// Genera un ID ASCII seguro a partir del nombre de la seña para cumplir con
+  /// DictionaryImportValidator._idPattern (`^[a-zA-Z0-9_-]{1,96}$`) aun cuando
+  /// el nombre visible contenga tildes o eñes (ej. `"PAPÁ"` -> `"papa_<ts>"`).
+  static String buildSignId(String word, int timestampMs) {
+    const diacritics = <String, String>{
+      'á': 'a', 'à': 'a', 'ä': 'a', 'â': 'a', 'ã': 'a', 'å': 'a',
+      'é': 'e', 'è': 'e', 'ë': 'e', 'ê': 'e',
+      'í': 'i', 'ì': 'i', 'ï': 'i', 'î': 'i',
+      'ó': 'o', 'ò': 'o', 'ö': 'o', 'ô': 'o', 'õ': 'o',
+      'ú': 'u', 'ù': 'u', 'ü': 'u', 'û': 'u',
+      'ñ': 'n',
+      'ç': 'c',
+    };
+    final lower = word.toLowerCase();
+    final buffer = StringBuffer();
+    for (int i = 0; i < lower.length; i++) {
+      final ch = lower[i];
+      buffer.write(diacritics[ch] ?? ch);
+    }
+    var slug = buffer
+        .toString()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'^_+|_+$'), '');
+    if (slug.isEmpty) {
+      slug = 'sign';
+    }
+    if (slug.length > 64) {
+      slug = slug.substring(0, 64).replaceAll(RegExp(r'_+$'), '');
+      if (slug.isEmpty) slug = 'sign';
+    }
+    return '${slug}_$timestampMs';
+  }
 
   BestTakeEvaluationResult? get bestEvaluation {
     if (_takes.isEmpty) return null;
@@ -214,9 +253,20 @@ class SignRecorderViewModel extends ChangeNotifier {
     });
 
     try {
+      final fps =
+          (settingsRepository?.offlineVideoFps ?? OfflineVideoConfig.defaultFps)
+              .toDouble();
+      final preset = settingsRepository?.offlineQualityPreset ??
+          OfflineVideoConfig.defaultPreset;
+      final maxDimension = OfflineVideoConfig.maxDimensionForPreset(preset);
+      final useGpu = settingsRepository?.useGpuDelegate ?? false;
+      _lastProcessedFps = fps;
+
       final frames = await videoDataSource.processVideo(
         videoPath: videoPath,
-        fps: 30.0,
+        fps: fps,
+        maxDimension: maxDimension,
+        useGpu: useGpu,
       );
 
       final durationMs = frames.isNotEmpty ? frames.last.timestampMs : 0;
@@ -315,11 +365,11 @@ class SignRecorderViewModel extends ChangeNotifier {
       final trimmed = winner.trimmedFrames;
 
       final sign = RecordedSign(
-        id: '${_word.toLowerCase().replaceAll(RegExp(r'\s+'), '_')}_${DateTime.now().millisecondsSinceEpoch}',
+        id: buildSignId(_word, DateTime.now().millisecondsSinceEpoch),
         word: _word,
         category: _category,
         requiredHands: _requiredHands,
-        fps: 30.0,
+        fps: _lastProcessedFps,
         detectionRate: eval.bestRate,
         averageConfidence: eval.bestConfidence,
         totalTakesEvaluated: _takes.length,

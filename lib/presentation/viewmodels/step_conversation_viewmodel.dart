@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../core/config/offline_video_config.dart';
 import '../../core/services/tts_service.dart';
 import '../../core/utils/app_logger.dart';
 import '../../data/datasources/camera_datasource.dart';
@@ -10,6 +12,7 @@ import '../../domain/entities/body_pose.dart';
 import '../../domain/entities/conversation_turn.dart';
 import '../../domain/entities/recorded_sign.dart';
 import '../../domain/repositories/i_dictionary_repository.dart';
+import '../../domain/repositories/i_settings_repository.dart';
 import '../../domain/usecases/compose_avatar_response_usecase.dart';
 import '../../domain/usecases/resolve_body_pose_usecase.dart';
 import '../../domain/usecases/segment_and_translate_video_usecase.dart';
@@ -28,6 +31,7 @@ class StepConversationViewModel extends ChangeNotifier {
   final CameraDataSource cameraDataSource;
   final VideoLandmarkerDataSource videoDataSource;
   final IDictionaryRepository dictionaryRepository;
+  final ISettingsRepository? settingsRepository;
   final ITtsService? ttsService;
   final ResolveBodyPoseUseCase resolveBodyPoseUseCase;
   final SegmentAndTranslateVideoUseCase segmentAndTranslateUseCase;
@@ -37,6 +41,7 @@ class StepConversationViewModel extends ChangeNotifier {
     required this.cameraDataSource,
     required this.videoDataSource,
     required this.dictionaryRepository,
+    this.settingsRepository,
     this.ttsService,
     ResolveBodyPoseUseCase? resolveBodyPoseUseCase,
     SegmentAndTranslateVideoUseCase? segmentAndTranslateUseCase,
@@ -46,7 +51,9 @@ class StepConversationViewModel extends ChangeNotifier {
         segmentAndTranslateUseCase =
             segmentAndTranslateUseCase ?? SegmentAndTranslateVideoUseCase(),
         composeAvatarUseCase =
-            composeAvatarUseCase ?? ComposeAvatarResponseUseCase();
+            composeAvatarUseCase ?? ComposeAvatarResponseUseCase() {
+    _syncVideoSettings();
+  }
 
   static const double maxRecordingSeconds = 60.0;
 
@@ -59,12 +66,15 @@ class StepConversationViewModel extends ChangeNotifier {
   double _recordingSeconds = 0.0;
   Timer? _recordingTimer;
 
-  // Progreso offline a 30 FPS
+  // Progreso offline configurable (FPS & preset de calidad)
   double _processingPercent = 0.0;
   int _processedFrames = 0;
   int _totalProcessingFrames = 0;
   StreamSubscription<VideoProgressUpdate>? _progressSubscription;
   String? _tempVideoPath;
+  String _activeQualityPreset = OfflineVideoConfig.defaultPreset;
+  int _activeProcessingFps = OfflineVideoConfig.defaultFps;
+  int _processingRunId = 0;
 
   // Traducción Señas -> Texto
   VideoTranslationResult? _lastTranslationResult;
@@ -90,6 +100,8 @@ class StepConversationViewModel extends ChangeNotifier {
   double get processingPercent => _processingPercent;
   int get processedFrames => _processedFrames;
   int get totalProcessingFrames => _totalProcessingFrames;
+  String get activeQualityPreset => _activeQualityPreset;
+  int get activeProcessingFps => _activeProcessingFps;
   VideoTranslationResult? get lastTranslationResult => _lastTranslationResult;
   ComposedAvatarResponse? get composedResponse => _composedResponse;
   int get playbackFrameIndex => _playbackFrameIndex;
@@ -131,9 +143,34 @@ class StepConversationViewModel extends ChangeNotifier {
     );
   }
 
+  void _syncVideoSettings() {
+    _activeQualityPreset = OfflineVideoConfig.sanitizePreset(
+      settingsRepository?.offlineQualityPreset ?? OfflineVideoConfig.defaultPreset,
+    );
+    _activeProcessingFps = OfflineVideoConfig.sanitizeFps(
+      settingsRepository?.offlineVideoFps ?? OfflineVideoConfig.defaultFps,
+    );
+  }
+
+  Future<void> selectQualityPreset(String preset) async {
+    final clean = OfflineVideoConfig.sanitizePreset(preset);
+    if (clean == _activeQualityPreset &&
+        _phase != StepConversationPhase.processing) {
+      return;
+    }
+    _activeQualityPreset = clean;
+    await settingsRepository?.setOfflineQualityPreset(clean);
+    notifyListeners();
+
+    if (_phase == StepConversationPhase.processing && _tempVideoPath != null) {
+      unawaited(_processAndSegmentVideo(_tempVideoPath!));
+    }
+  }
+
   Future<void> enterMode() async {
     _isActiveMode = true;
     _errorMessage = null;
+    _syncVideoSettings();
 
     if (!dictionaryRepository.isLoaded) {
       await dictionaryRepository.initialize();
@@ -149,9 +186,10 @@ class StepConversationViewModel extends ChangeNotifier {
 
   Future<void> leaveMode() async {
     _isActiveMode = false;
+    _processingRunId++;
     _countdownTimer?.cancel();
     _recordingTimer?.cancel();
-    _progressSubscription?.cancel();
+    await _progressSubscription?.cancel();
     _progressSubscription = null;
     _stopAvatarLoop();
     await _deleteTempVideo();
@@ -229,49 +267,72 @@ class StepConversationViewModel extends ChangeNotifier {
     _countdownTimer?.cancel();
     if (_phase != StepConversationPhase.recording) return;
 
+    _syncVideoSettings();
     _phase = StepConversationPhase.processing;
     _processingPercent = 0.0;
     _processedFrames = 0;
     _totalProcessingFrames = 0;
     notifyListeners();
 
+    String? capturedPath;
     try {
       final XFile? videoFile = await cameraDataSource.stopVideoRecording();
       if (videoFile == null) {
         throw Exception('La cámara no guardó el clip de video.');
       }
-      _tempVideoPath = videoFile.path;
+      capturedPath = videoFile.path;
+      _tempVideoPath = capturedPath;
       await cameraDataSource.disposeCamera();
-
-      await _processAndSegmentVideo(videoFile.path);
     } catch (e) {
       AppLogger.e(
-          'StepConversationViewModel: Error deteniendo o procesando grabación', e);
-      _errorMessage = 'Error al procesar el video: $e';
+          'StepConversationViewModel: Error deteniendo grabación <60s', e);
+      _errorMessage = 'Error capturando el video: $e';
       _phase = StepConversationPhase.readyToRecord;
+      await _deleteTempVideo();
       if (_isActiveMode) {
         await cameraDataSource.initializeCamera();
       }
       notifyListeners();
-    } finally {
-      await _deleteTempVideo();
+      return;
     }
+
+    await _processAndSegmentVideo(capturedPath);
   }
 
   Future<void> _processAndSegmentVideo(String videoPath) async {
-    _progressSubscription?.cancel();
+    final int runId = ++_processingRunId;
+    await _progressSubscription?.cancel();
+    _progressSubscription = null;
+    _processedFrames = 0;
+    _totalProcessingFrames = 0;
+    _processingPercent = 0.0;
+    notifyListeners();
+
     _progressSubscription = videoDataSource.progressStream.listen((update) {
+      if (runId != _processingRunId) return;
       _processedFrames = update.currentFrame;
       _totalProcessingFrames = update.totalFrames;
       _processingPercent = update.percent.clamp(0.0, 100.0);
       notifyListeners();
     });
 
+    final int targetFps = OfflineVideoConfig.sanitizeFps(
+      settingsRepository?.offlineVideoFps ?? _activeProcessingFps,
+    );
+    _activeProcessingFps = targetFps;
+    final int maxDimension =
+        OfflineVideoConfig.maxDimensionForPreset(_activeQualityPreset);
+    final bool useGpu = settingsRepository?.useGpuDelegate ?? false;
+
     try {
       final frames = await videoDataSource.processVideo(
         videoPath: videoPath,
-        fps: 30.0,
+        fps: targetFps.toDouble(),
+        maxDimension: maxDimension,
+        useGpu: useGpu,
       );
+
+      if (runId != _processingRunId) return;
 
       final result = segmentAndTranslateUseCase.execute(
         recordedFrames: frames,
@@ -292,10 +353,29 @@ class StepConversationViewModel extends ChangeNotifier {
       }
 
       _phase = StepConversationPhase.translatedReview;
+    } on PlatformException catch (e) {
+      if (e.code == 'CANCELLED' || runId != _processingRunId) return;
+      AppLogger.e('StepConversationViewModel: Error procesando grabación', e);
+      _errorMessage = 'Error al procesar el video: ${e.message ?? e.code}';
+      _phase = StepConversationPhase.readyToRecord;
+      if (_isActiveMode) {
+        await cameraDataSource.initializeCamera();
+      }
+    } catch (e) {
+      if (runId != _processingRunId) return;
+      AppLogger.e('StepConversationViewModel: Error procesando grabación', e);
+      _errorMessage = 'Error al procesar el video: $e';
+      _phase = StepConversationPhase.readyToRecord;
+      if (_isActiveMode) {
+        await cameraDataSource.initializeCamera();
+      }
     } finally {
-      _progressSubscription?.cancel();
-      _progressSubscription = null;
-      notifyListeners();
+      if (runId == _processingRunId) {
+        await _progressSubscription?.cancel();
+        _progressSubscription = null;
+        await _deleteTempVideo();
+        notifyListeners();
+      }
     }
   }
 
@@ -435,6 +515,7 @@ class StepConversationViewModel extends ChangeNotifier {
 
   Future<void> startNextTurn() async {
     _stopAvatarLoop();
+    _syncVideoSettings();
     _lastTranslationResult = null;
     _composedResponse = null;
     _activePlaybackFrames = const [];
@@ -476,6 +557,7 @@ class StepConversationViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    _processingRunId++;
     _countdownTimer?.cancel();
     _recordingTimer?.cancel();
     _progressSubscription?.cancel();

@@ -28,6 +28,8 @@ class SettingsViewModel extends ChangeNotifier {
   bool get useGpuDelegate => _settingsRepository.useGpuDelegate;
   bool get highPerformanceCamera => _settingsRepository.highPerformanceCamera;
   bool get hasSeenOnboarding => _settingsRepository.hasSeenOnboarding;
+  int get offlineVideoFps => _settingsRepository.offlineVideoFps;
+  String get offlineQualityPreset => _settingsRepository.offlineQualityPreset;
 
   // Estado del Dataset y Overrides
   int get factorySignsCount => _signRepository.factorySignsCount;
@@ -79,6 +81,16 @@ class SettingsViewModel extends ChangeNotifier {
 
   Future<void> markOnboardingSeen() async {
     await _settingsRepository.setHasSeenOnboarding(true);
+    notifyListeners();
+  }
+
+  Future<void> setOfflineVideoFps(int value) async {
+    await _settingsRepository.setOfflineVideoFps(value);
+    notifyListeners();
+  }
+
+  Future<void> setOfflineQualityPreset(String value) async {
+    await _settingsRepository.setOfflineQualityPreset(value);
     notifyListeners();
   }
 

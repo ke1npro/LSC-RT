@@ -6,6 +6,8 @@ abstract class ISettingsRepository {
   bool get useGpuDelegate;
   bool get highPerformanceCamera;
   bool get hasSeenOnboarding;
+  int get offlineVideoFps;
+  String get offlineQualityPreset;
 
   Future<void> initialize();
   Future<void> setShowMediaPipeOverlay(bool value);
@@ -15,4 +17,6 @@ abstract class ISettingsRepository {
   Future<void> setUseGpuDelegate(bool value);
   Future<void> setHighPerformanceCamera(bool value);
   Future<void> setHasSeenOnboarding(bool value);
+  Future<void> setOfflineVideoFps(int value);
+  Future<void> setOfflineQualityPreset(String value);
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import '../../core/config/offline_video_config.dart';
 import '../../core/utils/app_logger.dart';
 import '../../data/datasources/camera_datasource.dart';
 import '../../data/datasources/video_landmarker_datasource.dart';
@@ -309,9 +310,19 @@ class TeachingViewModel extends ChangeNotifier {
     });
 
     try {
+      final fps =
+          (settingsRepository?.offlineVideoFps ?? OfflineVideoConfig.defaultFps)
+              .toDouble();
+      final preset = settingsRepository?.offlineQualityPreset ??
+          OfflineVideoConfig.defaultPreset;
+      final maxDimension = OfflineVideoConfig.maxDimensionForPreset(preset);
+      final useGpu = settingsRepository?.useGpuDelegate ?? false;
+
       final frames = await videoDataSource.processVideo(
         videoPath: videoPath,
-        fps: 30.0,
+        fps: fps,
+        maxDimension: maxDimension,
+        useGpu: useGpu,
       );
 
       _attemptFrames = frames;

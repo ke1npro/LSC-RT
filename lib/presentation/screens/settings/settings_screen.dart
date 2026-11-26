@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/config/offline_video_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../domain/repositories/i_vision_repository.dart';
 import '../../viewmodels/settings_viewmodel.dart';
@@ -100,6 +101,26 @@ class SettingsScreen extends StatelessWidget {
                     value: settingsVm.useGpuDelegate,
                     onChanged: (val) =>
                         settingsVm.setUseGpuDelegate(val),
+                  ),
+                  const Divider(height: 1, color: AppColors.glassBorder),
+                  _buildOfflineFpsTile(
+                    icon: Icons.shutter_speed_rounded,
+                    iconColor: AppColors.mintGreen,
+                    title: 'FPS de Procesamiento Offline',
+                    subtitle:
+                        'Menor FPS acelera el análisis de videos largos (Paso a Paso y Diccionario).',
+                    currentValue: settingsVm.offlineVideoFps,
+                    onChanged: (val) => settingsVm.setOfflineVideoFps(val),
+                  ),
+                  const Divider(height: 1, color: AppColors.glassBorder),
+                  _buildOfflineQualityTile(
+                    icon: Icons.tune_rounded,
+                    iconColor: AppColors.cyanAccent,
+                    title: 'Calidad de Procesamiento Offline',
+                    subtitle:
+                        'Controla la resolución de entrada a MediaPipe para equilibrar velocidad y precisión.',
+                    currentValue: settingsVm.offlineQualityPreset,
+                    onChanged: (val) => settingsVm.setOfflineQualityPreset(val),
                   ),
                 ]),
 
@@ -534,6 +555,84 @@ class SettingsScreen extends StatelessWidget {
     required int currentValue,
     required ValueChanged<int> onChanged,
   }) {
+    final safeValue =
+        const [0, 90, 180, 270].contains(currentValue) ? currentValue : 270;
+    return _buildDropdownTile<int>(
+      icon: icon,
+      iconColor: iconColor,
+      title: title,
+      subtitle: subtitle,
+      value: safeValue,
+      valueColor: AppColors.cyanAccent,
+      items: const [
+        DropdownMenuItem(value: 0, child: Text('0°')),
+        DropdownMenuItem(value: 90, child: Text('90°')),
+        DropdownMenuItem(value: 180, child: Text('180°')),
+        DropdownMenuItem(value: 270, child: Text('270°')),
+      ],
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildOfflineFpsTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required int currentValue,
+    required ValueChanged<int> onChanged,
+  }) {
+    return _buildDropdownTile<int>(
+      icon: icon,
+      iconColor: iconColor,
+      title: title,
+      subtitle: subtitle,
+      value: OfflineVideoConfig.sanitizeFps(currentValue),
+      valueColor: AppColors.mintGreen,
+      items: OfflineVideoConfig.validFps
+          .map((fps) => DropdownMenuItem(value: fps, child: Text('$fps FPS')))
+          .toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildOfflineQualityTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required String currentValue,
+    required ValueChanged<String> onChanged,
+  }) {
+    return _buildDropdownTile<String>(
+      icon: icon,
+      iconColor: iconColor,
+      title: title,
+      subtitle: subtitle,
+      value: OfflineVideoConfig.sanitizePreset(currentValue),
+      valueColor: AppColors.cyanAccent,
+      items: OfflineVideoConfig.validPresets
+          .map(
+            (preset) => DropdownMenuItem(
+              value: preset,
+              child: Text(OfflineVideoConfig.labelForPreset(preset)),
+            ),
+          )
+          .toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildDropdownTile<T>({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required T value,
+    required Color valueColor,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T> onChanged,
+  }) {
     return ListTile(
       leading: Icon(icon, color: iconColor, size: 22),
       title: Text(
@@ -553,20 +652,15 @@ class SettingsScreen extends StatelessWidget {
         ),
       ),
       trailing: DropdownButtonHideUnderline(
-        child: DropdownButton<int>(
-          value: currentValue,
+        child: DropdownButton<T>(
+          value: value,
           dropdownColor: AppColors.surface,
-          style: const TextStyle(
-            color: AppColors.cyanAccent,
+          style: TextStyle(
+            color: valueColor,
             fontWeight: FontWeight.bold,
             fontSize: 13,
           ),
-          items: const [
-            DropdownMenuItem(value: 0, child: Text('0°')),
-            DropdownMenuItem(value: 90, child: Text('90°')),
-            DropdownMenuItem(value: 180, child: Text('180°')),
-            DropdownMenuItem(value: 270, child: Text('270°')),
-          ],
+          items: items,
           onChanged: (val) {
             if (val != null) onChanged(val);
           },

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/config/offline_video_config.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../domain/entities/conversation_turn.dart';
 import '../../../viewmodels/step_conversation_viewmodel.dart';
@@ -347,6 +348,24 @@ class _StepConversationViewState extends State<StepConversationView> {
                         shadows: [Shadow(color: Colors.black, blurRadius: 4)],
                       ),
                     ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.glassBorder),
+                      ),
+                      child: Text(
+                        '${OfflineVideoConfig.labelForPreset(vm.activeQualityPreset)} · ${vm.activeProcessingFps} FPS',
+                        style: const TextStyle(
+                          color: AppColors.cyanAccent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -357,64 +376,149 @@ class _StepConversationViewState extends State<StepConversationView> {
     );
   }
 
-  // PROCESAMIENTO OFFLINE A 30 FPS
+  // PROCESAMIENTO OFFLINE CONFIGURABLE (FPS & PRESET)
   Widget _buildProcessingPhase(StepConversationViewModel vm) {
     return Center(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 24),
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: const Color(0xF2121727),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.glassBorder),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.cyanAccent),
-              strokeWidth: 4,
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Analizando grabación a 30 FPS',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: const Color(0xF2121727),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppColors.glassBorder),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.cyanAccent),
+                strokeWidth: 4,
               ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Extrayendo puntos de las manos y segmentando señas por puntos finales...',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-                height: 1.4,
+              const SizedBox(height: 20),
+              Text(
+                'Analizando grabación a ${vm.activeProcessingFps} FPS',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            const SizedBox(height: 18),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: (vm.processingPercent / 100.0).clamp(0.0, 1.0),
-                backgroundColor: AppColors.surfaceGlass,
-                valueColor:
-                    const AlwaysStoppedAnimation<Color>(AppColors.cyanAccent),
-                minHeight: 8,
+              const SizedBox(height: 8),
+              const Text(
+                'Extrayendo puntos de las manos y segmentando señas por puntos finales...',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                  height: 1.4,
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '${vm.processedFrames} / ${vm.totalProcessingFrames} frames (${vm.processingPercent.toInt()}%)',
-              style: const TextStyle(
-                color: AppColors.cyanAccent,
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
+              const SizedBox(height: 18),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: (vm.processingPercent / 100.0).clamp(0.0, 1.0),
+                  backgroundColor: AppColors.surfaceGlass,
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(AppColors.cyanAccent),
+                  minHeight: 8,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 10),
+              Text(
+                '${vm.processedFrames} / ${vm.totalProcessingFrames} frames (${vm.processingPercent.toInt()}%)',
+                style: const TextStyle(
+                  color: AppColors.cyanAccent,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Divider(height: 1, color: AppColors.glassBorder),
+              const SizedBox(height: 14),
+              const Text(
+                'Preset de calidad',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: OfflineVideoConfig.validPresets.map((preset) {
+                  final isSelected = vm.activeQualityPreset == preset;
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () => vm.selectQualityPreset(preset),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppColors.cyanAccent
+                                : AppColors.surfaceGlass,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.cyanAccent
+                                  : AppColors.glassBorder,
+                            ),
+                          ),
+                          child: Text(
+                            OfflineVideoConfig.labelForPreset(preset),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.black
+                                  : AppColors.textPrimary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 10),
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    color: AppColors.textMuted,
+                    size: 14,
+                  ),
+                  SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'En configuraciones puedes elegir más',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                'FPS: 30 / 20 / 15',
+                style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
