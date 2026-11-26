@@ -103,4 +103,37 @@ class AvatarTheme {
         skinShadeColor: Color(0xFFA56E4C),
         backdropColor: Color(0xFF1E4D44),
       );
+
+  /// Crea una copia de este tema reemplazando los campos indicados.
+  AvatarTheme copyWith({
+    double? sourceAspect,
+    bool? showTrail,
+    bool? showBackdrop,
+  }) {
+    return AvatarTheme(
+      leftHandColor: leftHandColor,
+      rightHandColor: rightHandColor,
+      skinColor: skinColor,
+      skinShadeColor: skinShadeColor,
+      shirtColor: shirtColor,
+      shirtShadeColor: shirtShadeColor,
+      hairColor: hairColor,
+      outlineColor: outlineColor,
+      backdropColor: backdropColor,
+      torsoColor: torsoColor,
+      leftArmColor: leftArmColor,
+      rightArmColor: rightArmColor,
+      headColor: headColor,
+      jointColor: jointColor,
+      trailColor: trailColor,
+      jointRadius: jointRadius,
+      boneWidth: boneWidth,
+      showTrail: showTrail ?? this.showTrail,
+      trailLength: trailLength,
+      glowSigma: glowSigma,
+      outlineScale: outlineScale,
+      showBackdrop: showBackdrop ?? this.showBackdrop,
+      sourceAspect: sourceAspect ?? this.sourceAspect,
+    );
+  }
 }

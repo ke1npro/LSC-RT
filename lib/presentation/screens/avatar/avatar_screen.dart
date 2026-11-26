@@ -61,35 +61,63 @@ class _AvatarScreenState extends State<AvatarScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Contenido principal deslizable
+          // Contenido principal deslizable con recarga
           SafeArea(
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(20, 80, 20, bottomPadding + 20),
-              children: [
-                // 1. Panel de Construcción de la Frase
-                _buildSentenceBuilderCard(context, avatarVm),
+            child: RefreshIndicator(
+              color: AppColors.cyanAccent,
+              backgroundColor: const Color(0xFF121727),
+              onRefresh: () => avatarVm.refresh(),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(20, 80, 20, bottomPadding + 20),
+                children: [
+                  // 1. Panel de Construcción de la Frase
+                  _buildSentenceBuilderCard(context, avatarVm),
 
-                const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-                // 2. Buscador y Filtro por Categoría
-                _buildSearchAndFilters(avatarVm),
+                  // 2. Buscador y Filtro por Categoría
+                  _buildSearchAndFilters(avatarVm),
 
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-                // 3. Catálogo de Palabras Calibradas
-                _buildSignsCatalog(avatarVm),
-              ],
+                  // 3. Catálogo de Palabras Calibradas
+                  _buildSignsCatalog(avatarVm),
+                ],
+              ),
             ),
           ),
 
           // Barra Superior Flotante Glassmorphism
-          const Positioned(
+          Positioned(
             top: 0,
             left: 0,
             right: 0,
             child: GlassTopBar(
               title: 'Avatar LSC',
               subtitle: 'Texto a Señas en Tiempo Real',
+              actions: [
+                IconButton(
+                  icon: avatarVm.isRefreshing
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.cyanAccent,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.refresh_rounded,
+                          color: AppColors.cyanAccent,
+                          size: 20,
+                        ),
+                  splashRadius: 20,
+                  tooltip: 'Refrescar señas',
+                  onPressed:
+                      avatarVm.isRefreshing ? null : () => avatarVm.refresh(),
+                ),
+              ],
             ),
           ),
 

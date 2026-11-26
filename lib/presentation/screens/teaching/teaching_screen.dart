@@ -868,6 +868,41 @@ class _TeachingScreenState extends State<TeachingScreen> {
 
             const SizedBox(height: 16),
 
+            if (result.alternativeSuggestionMessage != null) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.cyanAccent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppColors.cyanAccent.withValues(alpha: 0.5),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.lightbulb_outline_rounded,
+                      color: AppColors.cyanAccent,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        result.alternativeSuggestionMessage!,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 13,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // Desglose de métricas
             Row(
               children: [

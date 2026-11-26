@@ -192,11 +192,18 @@ class VideoLandmarkerProcessor(private val context: Context) : EventChannel.Stre
         return handsList
     }
 
+    fun cancelProcessing() {
+        activeJob?.cancel()
+        activeJob = null
+    }
+
     fun processVideo(
         videoPath: String,
         fpsTarget: Double = 20.0,
         maxDimension: Int = 360,
         useGpu: Boolean = false,
+        startMs: Long? = null,
+        endMs: Long? = null,
         onSuccess: (List<Map<String, Any>>) -> Unit,
         onError: (String, String?) -> Unit
     ) {
@@ -246,12 +253,29 @@ class VideoLandmarkerProcessor(private val context: Context) : EventChannel.Stre
                     max(1, ((durationMs / 1000.0) * sourceFps).toInt())
                 }
 
+                val effectiveStartMs = (startMs ?: 0L).coerceIn(0L, durationMs)
+                val effectiveEndMs = (endMs ?: durationMs).coerceIn(effectiveStartMs, durationMs)
+                val startSourceIdx = if (effectiveStartMs <= 0L) {
+                    0
+                } else {
+                    ((effectiveStartMs.toDouble() / durationMs.toDouble()) * totalSourceFrames)
+                        .toInt()
+                        .coerceIn(0, totalSourceFrames - 1)
+                }
+                val endSourceIdx = if (effectiveEndMs >= durationMs) {
+                    totalSourceFrames - 1
+                } else {
+                    ((effectiveEndMs.toDouble() / durationMs.toDouble()) * totalSourceFrames)
+                        .toInt()
+                        .coerceIn(startSourceIdx, totalSourceFrames - 1)
+                }
+
                 val effectiveTargetFps = fpsTarget.coerceIn(10.0, sourceFps)
                 val stride = (sourceFps / effectiveTargetFps).coerceAtLeast(1.0)
 
                 val targetSourceIndices = ArrayList<Int>()
-                var cursor = 0.0
-                while (cursor.toInt() < totalSourceFrames) {
+                var cursor = startSourceIdx.toDouble()
+                while (cursor.toInt() <= endSourceIdx) {
                     val idx = cursor.toInt()
                     if (targetSourceIndices.isEmpty() || targetSourceIndices.last() != idx) {
                         targetSourceIndices.add(idx)
@@ -259,7 +283,7 @@ class VideoLandmarkerProcessor(private val context: Context) : EventChannel.Stre
                     cursor += stride
                 }
                 if (targetSourceIndices.isEmpty()) {
-                    targetSourceIndices.add(0)
+                    targetSourceIndices.add(startSourceIdx)
                 }
 
                 val totalTargetFrames = targetSourceIndices.size
@@ -333,10 +357,11 @@ class VideoLandmarkerProcessor(private val context: Context) : EventChannel.Stre
                     val bitmapParams = MediaMetadataRetriever.BitmapParams().apply {
                         preferredConfig = Bitmap.Config.ARGB_8888
                     }
-                    var batchStart = 0
-                    while (batchStart < totalSourceFrames) {
+                    var batchStart = startSourceIdx
+                    val decodeLimit = endSourceIdx + 1
+                    while (batchStart < decodeLimit) {
                         if (!isActive) return@launch
-                        val batchEnd = min(totalSourceFrames, batchStart + batchSize)
+                        val batchEnd = min(decodeLimit, batchStart + batchSize)
                         val count = batchEnd - batchStart
 
                         var hasTargetInBatch = false

@@ -5,14 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/config/offline_video_config.dart';
 import '../../core/services/tts_service.dart';
+import '../../core/theme/avatar_theme.dart';
 import '../../core/utils/app_logger.dart';
 import '../../data/datasources/camera_datasource.dart';
 import '../../data/datasources/video_landmarker_datasource.dart';
+import '../../domain/entities/avatar_sign_data.dart';
 import '../../domain/entities/body_pose.dart';
 import '../../domain/entities/conversation_turn.dart';
 import '../../domain/entities/recorded_sign.dart';
 import '../../domain/repositories/i_dictionary_repository.dart';
 import '../../domain/repositories/i_settings_repository.dart';
+import '../../domain/services/sign_frame_avatar_adapter.dart';
 import '../../domain/usecases/compose_avatar_response_usecase.dart';
 import '../../domain/usecases/resolve_body_pose_usecase.dart';
 import '../../domain/usecases/segment_and_translate_video_usecase.dart';
@@ -21,6 +24,7 @@ enum StepConversationPhase {
   readyToRecord,
   countdown,
   recording,
+  trimBeforeProcessing,
   processing,
   translatedReview,
   composeReply,
@@ -72,6 +76,8 @@ class StepConversationViewModel extends ChangeNotifier {
   int _totalProcessingFrames = 0;
   StreamSubscription<VideoProgressUpdate>? _progressSubscription;
   String? _tempVideoPath;
+  int _trimStartMs = 0;
+  int? _trimEndMs;
   String _activeQualityPreset = OfflineVideoConfig.defaultPreset;
   int _activeProcessingFps = OfflineVideoConfig.defaultFps;
   int _processingRunId = 0;
@@ -88,6 +94,10 @@ class StepConversationViewModel extends ChangeNotifier {
   bool _isPlayingAvatar = false;
   double _playbackSpeed = 1.0;
   Timer? _playbackTimer;
+  final AvatarTheme _avatarTheme = AvatarTheme.character().copyWith(
+    sourceAspect: SignFrameAvatarAdapter.portraitSourceAspect,
+    showTrail: false,
+  );
 
   // Historial por turnos de la sesión actual
   final List<ConversationTurn> _history = [];
@@ -100,6 +110,9 @@ class StepConversationViewModel extends ChangeNotifier {
   double get processingPercent => _processingPercent;
   int get processedFrames => _processedFrames;
   int get totalProcessingFrames => _totalProcessingFrames;
+  String? get tempVideoPath => _tempVideoPath;
+  int get trimStartMs => _trimStartMs;
+  int? get trimEndMs => _trimEndMs;
   String get activeQualityPreset => _activeQualityPreset;
   int get activeProcessingFps => _activeProcessingFps;
   VideoTranslationResult? get lastTranslationResult => _lastTranslationResult;
@@ -108,6 +121,7 @@ class StepConversationViewModel extends ChangeNotifier {
   int get totalPlaybackFrames => _activePlaybackFrames.length;
   bool get isPlayingAvatar => _isPlayingAvatar;
   double get playbackSpeed => _playbackSpeed;
+  AvatarTheme get avatarTheme => _avatarTheme;
   List<ConversationTurn> get history => List.unmodifiable(_history);
   bool get isHistoryExpanded => _isHistoryExpanded;
   String? get errorMessage => _errorMessage;
@@ -129,6 +143,16 @@ class StepConversationViewModel extends ChangeNotifier {
       }
     }
     return _activeWordLabels.first;
+  }
+
+  /// Construye el cuadro ilustrado del Avatar para el fotograma actual.
+  AvatarFrame? buildCurrentAvatarFrame() {
+    if (_activePlaybackFrames.isEmpty) return null;
+    final idx = _playbackFrameIndex.clamp(0, _activePlaybackFrames.length - 1);
+    return SignFrameAvatarAdapter.toAvatarFrame(
+      _activePlaybackFrames[idx],
+      resolveBodyPoseUseCase,
+    );
   }
 
   BodyPose? buildCurrentAvatarPose(Size size) {
@@ -163,7 +187,13 @@ class StepConversationViewModel extends ChangeNotifier {
     notifyListeners();
 
     if (_phase == StepConversationPhase.processing && _tempVideoPath != null) {
-      unawaited(_processAndSegmentVideo(_tempVideoPath!));
+      unawaited(
+        _processAndSegmentVideo(
+          _tempVideoPath!,
+          startMs: _trimStartMs,
+          endMs: _trimEndMs,
+        ),
+      );
     }
   }
 
@@ -268,21 +298,21 @@ class StepConversationViewModel extends ChangeNotifier {
     if (_phase != StepConversationPhase.recording) return;
 
     _syncVideoSettings();
-    _phase = StepConversationPhase.processing;
     _processingPercent = 0.0;
     _processedFrames = 0;
     _totalProcessingFrames = 0;
-    notifyListeners();
 
-    String? capturedPath;
     try {
       final XFile? videoFile = await cameraDataSource.stopVideoRecording();
       if (videoFile == null) {
         throw Exception('La cámara no guardó el clip de video.');
       }
-      capturedPath = videoFile.path;
-      _tempVideoPath = capturedPath;
+      _tempVideoPath = videoFile.path;
+      _trimStartMs = 0;
+      _trimEndMs = null;
       await cameraDataSource.disposeCamera();
+      _phase = StepConversationPhase.trimBeforeProcessing;
+      notifyListeners();
     } catch (e) {
       AppLogger.e(
           'StepConversationViewModel: Error deteniendo grabación <60s', e);
@@ -293,13 +323,90 @@ class StepConversationViewModel extends ChangeNotifier {
         await cameraDataSource.initializeCamera();
       }
       notifyListeners();
-      return;
     }
-
-    await _processAndSegmentVideo(capturedPath);
   }
 
-  Future<void> _processAndSegmentVideo(String videoPath) async {
+  /// Actualiza el rango de recorte (en milisegundos) antes de procesar el video.
+  void setTrimRange(int startMs, int endMs) {
+    _trimStartMs = startMs < 0 ? 0 : startMs;
+    _trimEndMs = endMs < _trimStartMs ? _trimStartMs : endMs;
+    notifyListeners();
+  }
+
+  /// Inicia el procesamiento del segmento recortado (o completo si no se ajustó).
+  Future<void> processTrimmedVideo() async {
+    final path = _tempVideoPath;
+    if (path == null) return;
+    _phase = StepConversationPhase.processing;
+    notifyListeners();
+    await _processAndSegmentVideo(
+      path,
+      startMs: _trimStartMs,
+      endMs: _trimEndMs,
+    );
+  }
+
+  /// Cancela la cuenta regresiva, la grabación activa o el recorte previo y vuelve a cámara.
+  Future<void> cancelRecording() async {
+    _countdownTimer?.cancel();
+    _recordingTimer?.cancel();
+    final previousPhase = _phase;
+    _errorMessage = null;
+    _recordingSeconds = 0.0;
+    _trimStartMs = 0;
+    _trimEndMs = null;
+
+    if (previousPhase == StepConversationPhase.recording) {
+      try {
+        final XFile? discarded = await cameraDataSource.stopVideoRecording();
+        if (discarded != null) {
+          final f = File(discarded.path);
+          if (await f.exists()) {
+            await f.delete();
+          }
+        }
+      } catch (_) {}
+    }
+
+    await _deleteTempVideo();
+    _phase = StepConversationPhase.readyToRecord;
+    notifyListeners();
+
+    if (_isActiveMode) {
+      cameraDataSource.setResolutionPreset(ResolutionPreset.high);
+      await cameraDataSource.initializeCamera();
+      notifyListeners();
+    }
+  }
+
+  /// Cancela el procesamiento de video en curso y descarta la grabación temporal.
+  Future<void> cancelProcessing() async {
+    _processingRunId++;
+    await _progressSubscription?.cancel();
+    _progressSubscription = null;
+    unawaited(videoDataSource.cancelProcessing());
+    await _deleteTempVideo();
+    _processingPercent = 0.0;
+    _processedFrames = 0;
+    _totalProcessingFrames = 0;
+    _trimStartMs = 0;
+    _trimEndMs = null;
+    _errorMessage = null;
+    _phase = StepConversationPhase.readyToRecord;
+    notifyListeners();
+
+    if (_isActiveMode) {
+      cameraDataSource.setResolutionPreset(ResolutionPreset.high);
+      await cameraDataSource.initializeCamera();
+      notifyListeners();
+    }
+  }
+
+  Future<void> _processAndSegmentVideo(
+    String videoPath, {
+    int? startMs,
+    int? endMs,
+  }) async {
     final int runId = ++_processingRunId;
     await _progressSubscription?.cancel();
     _progressSubscription = null;
@@ -330,6 +437,8 @@ class StepConversationViewModel extends ChangeNotifier {
         fps: targetFps.toDouble(),
         maxDimension: maxDimension,
         useGpu: useGpu,
+        startMs: startMs,
+        endMs: endMs,
       );
 
       if (runId != _processingRunId) return;

@@ -182,5 +182,41 @@ void main() {
       expect(result.verdict, PracticeVerdict.insufficientHands);
       expect(result.confidencePercent, 0);
     });
+
+    test('Suggests alternative sign when attempt strongly matches another sign', () {
+      final targetPapa = makeReferenceSign(frameCount: 20);
+      final otherBienFrames = List.generate(20, (i) {
+        return SignFrameLandmarks(
+          frameIndex: i,
+          timestampMs: i * 33,
+          hands: [HandPose(landmarks: makeFistHand(offsetX: 0.25, offsetY: 0.7))],
+        );
+      });
+      final otherBien = RecordedSign(
+        id: 'bien_1',
+        word: 'BIEN',
+        category: 'Saludos',
+        requiredHands: 1,
+        fps: 30,
+        detectionRate: 1.0,
+        averageConfidence: 0.95,
+        totalTakesEvaluated: 1,
+        createdAt: DateTime(2026, 1, 1),
+        frames: otherBienFrames,
+      );
+
+      final result = useCase.execute(
+        referenceSign: targetPapa,
+        attemptFrames: otherBienFrames,
+        otherSigns: [targetPapa, otherBien],
+      );
+
+      expect(result.alternativeSignWord, 'BIEN');
+      expect(result.alternativeConfidencePercent, greaterThanOrEqualTo(90));
+      expect(
+        result.alternativeSuggestionMessage,
+        contains('¿hiciste esta seña?'),
+      );
+    });
   });
 }

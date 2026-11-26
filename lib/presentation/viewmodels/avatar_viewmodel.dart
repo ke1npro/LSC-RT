@@ -9,6 +9,7 @@ class AvatarViewModel extends ChangeNotifier {
   final AvatarMotionDataSource motionDataSource;
 
   bool _isInitialized = false;
+  bool _isRefreshing = false;
   String _selectedCategory = 'Todos';
   String _searchQuery = '';
   final List<AvatarSignData> _sentenceSequence = [];
@@ -31,6 +32,7 @@ class AvatarViewModel extends ChangeNotifier {
   AvatarViewModel(this.motionDataSource);
 
   bool get isInitialized => _isInitialized;
+  bool get isRefreshing => _isRefreshing;
   String get selectedCategory => _selectedCategory;
   String get searchQuery => _searchQuery;
   List<AvatarSignData> get sentenceSequence => List.unmodifiable(_sentenceSequence);
@@ -73,6 +75,25 @@ class AvatarViewModel extends ChangeNotifier {
     await motionDataSource.initialize();
     _isInitialized = true;
     notifyListeners();
+  }
+
+  /// Recarga el catálogo del banco de señas del avatar y actualiza la vista.
+  Future<void> refresh() async {
+    if (_isRefreshing) return;
+    _isRefreshing = true;
+    notifyListeners();
+    try {
+      await motionDataSource.refresh();
+      _isInitialized = motionDataSource.isLoaded;
+      if (_selectedCategory != 'Todos' &&
+          !motionDataSource.getCategories().contains(_selectedCategory)) {
+        _selectedCategory = 'Todos';
+      }
+      _preparePlaybackFrames();
+    } finally {
+      _isRefreshing = false;
+      notifyListeners();
+    }
   }
 
   List<String> get categories {

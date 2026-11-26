@@ -44,12 +44,21 @@ class VideoLandmarkerDataSource {
     return _progressStream!;
   }
 
+  /// Solicita la cancelación del procesamiento de video en curso.
+  Future<void> cancelProcessing() async {
+    try {
+      await _methodChannel.invokeMethod('cancelProcessing');
+    } catch (_) {}
+  }
+
   /// Procesa un archivo de video local offline con MediaPipe HandLandmarker (RunningMode.VIDEO).
   Future<List<SignFrameLandmarks>> processVideo({
     required String videoPath,
     double fps = 20.0,
     int maxDimension = 360,
     bool useGpu = false,
+    int? startMs,
+    int? endMs,
   }) async {
     try {
       final dynamic raw = await _methodChannel.invokeMethod('processVideo', {
@@ -57,6 +66,8 @@ class VideoLandmarkerDataSource {
         'fps': fps,
         'maxDimension': maxDimension,
         'useGpu': useGpu,
+        'startMs': ?startMs,
+        'endMs': ?endMs,
       });
 
       if (raw is! List) {

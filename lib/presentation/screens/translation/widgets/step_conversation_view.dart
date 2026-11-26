@@ -4,8 +4,9 @@ import '../../../../core/config/offline_video_config.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../domain/entities/conversation_turn.dart';
 import '../../../viewmodels/step_conversation_viewmodel.dart';
+import '../../../widgets/avatar/avatar_pose_painter.dart';
 import '../../../widgets/camera_viewport.dart';
-import '../../../widgets/painters/body_pose_painter.dart';
+import 'pre_process_video_trimmer.dart';
 
 class StepConversationView extends StatefulWidget {
   const StepConversationView({super.key});
@@ -177,6 +178,17 @@ class _StepConversationViewState extends State<StepConversationView> {
       case StepConversationPhase.countdown:
       case StepConversationPhase.recording:
         return _buildCameraPhase(vm);
+      case StepConversationPhase.trimBeforeProcessing:
+        final path = vm.tempVideoPath;
+        if (path == null) return _buildCameraPhase(vm);
+        return PreProcessVideoTrimmer(
+          videoPath: path,
+          initialStartMs: vm.trimStartMs,
+          initialEndMs: vm.trimEndMs,
+          onTrimChanged: vm.setTrimRange,
+          onProcess: () => vm.processTrimmedVideo(),
+          onCancel: () => vm.cancelRecording(),
+        );
       case StepConversationPhase.processing:
         return _buildProcessingPhase(vm);
       case StepConversationPhase.translatedReview:
@@ -310,12 +322,49 @@ class _StepConversationViewState extends State<StepConversationView> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    FloatingActionButton.extended(
-                      backgroundColor: Colors.redAccent,
-                      foregroundColor: Colors.white,
-                      icon: const Icon(Icons.stop_rounded),
-                      label: const Text('Detener y Traducir'),
-                      onPressed: () => vm.stopRecordingAndTranslate(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            backgroundColor: Colors.black.withValues(alpha: 0.6),
+                            side: const BorderSide(color: Colors.white54),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          icon: const Icon(Icons.close_rounded),
+                          label: const Text('Cancelar'),
+                          onPressed: () => vm.cancelRecording(),
+                        ),
+                        const SizedBox(width: 12),
+                        FloatingActionButton.extended(
+                          backgroundColor: Colors.redAccent,
+                          foregroundColor: Colors.white,
+                          icon: const Icon(Icons.stop_rounded),
+                          label: const Text('Detener y Recortar'),
+                          onPressed: () => vm.stopRecordingAndTranslate(),
+                        ),
+                      ],
+                    ),
+                  ] else if (vm.phase == StepConversationPhase.countdown) ...[
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        backgroundColor: Colors.black.withValues(alpha: 0.65),
+                        side: const BorderSide(color: Colors.white54),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      icon: const Icon(Icons.close_rounded),
+                      label: const Text('Cancelar'),
+                      onPressed: () => vm.cancelRecording(),
                     ),
                   ] else if (vm.phase == StepConversationPhase.readyToRecord) ...[
                     GestureDetector(
@@ -517,11 +566,64 @@ class _StepConversationViewState extends State<StepConversationView> {
                   fontSize: 11,
                 ),
               ),
+              const SizedBox(height: 18),
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.redError,
+                ),
+                icon: const Icon(Icons.cancel_outlined, size: 18),
+                label: const Text('Cancelar procesamiento'),
+                onPressed: () => _confirmCancelProcessing(context, vm),
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _confirmCancelProcessing(
+    BuildContext context,
+    StepConversationViewModel vm,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF141A2C),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: AppColors.glassBorder),
+        ),
+        title: const Text(
+          '¿Cancelar procesamiento?',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+        content: const Text(
+          'Se perderá el avance del análisis de video y tendrás que grabar la seña de nuevo.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.cyanAccent,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Seguir procesando'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.redError),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Sí, cancelar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await vm.cancelProcessing();
+    }
   }
 
   // PASO 2: REVISIÓN DEL TEXTO TRADUCIDO + TTS
@@ -788,31 +890,35 @@ class _StepConversationViewState extends State<StepConversationView> {
         ),
         const SizedBox(height: 10),
         Container(
-          height: 290,
+          height: 330,
           decoration: BoxDecoration(
-            color: const Color(0xFF0A0E1A),
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF151D33), Color(0xFF0B1020)],
+            ),
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: AppColors.glassBorder),
+            border: Border.all(
+              color: AppColors.cyanAccent.withValues(alpha: 0.2),
+            ),
           ),
-          child: hasAnimation
-              ? LayoutBuilder(
-                  builder: (context, constraints) {
-                    final size =
-                        Size(constraints.maxWidth, constraints.maxHeight);
-                    final pose = vm.buildCurrentAvatarPose(size);
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (pose != null)
-                          CustomPaint(
-                            size: Size.infinite,
-                            painter: BodyPosePainter(
-                              pose: pose,
-                              showOverlay: true,
-                              showFace: false,
-                              isMirrored: false,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: hasAnimation
+                ? Builder(
+                    builder: (context) {
+                      final avatarFrame = vm.buildCurrentAvatarFrame();
+                      return Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          if (avatarFrame != null)
+                            CustomPaint(
+                              size: Size.infinite,
+                              painter: AvatarPosePainter(
+                                frame: avatarFrame,
+                                theme: vm.avatarTheme,
+                              ),
                             ),
-                          ),
                         if (activeWord.isNotEmpty)
                           Positioned(
                             top: 12,
@@ -879,6 +985,7 @@ class _StepConversationViewState extends State<StepConversationView> {
                     ),
                   ),
                 ),
+          ),
         ),
         if (response != null && response.missingWords.isNotEmpty) ...[
           const SizedBox(height: 12),

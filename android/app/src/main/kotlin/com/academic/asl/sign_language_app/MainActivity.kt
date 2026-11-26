@@ -57,6 +57,8 @@ class MainActivity : FlutterFragmentActivity() {
                         val fps = call.argument<Double>("fps") ?: 20.0
                         val maxDimension = call.argument<Int>("maxDimension") ?: 360
                         val useGpu = call.argument<Boolean>("useGpu") ?: false
+                        val startMs = (call.argument<Number>("startMs"))?.toLong()
+                        val endMs = (call.argument<Number>("endMs"))?.toLong()
                         if (videoPath.isNullOrBlank()) {
                             result.error("INVALID_ARGUMENT", "Ruta de video requerida", null)
                             return@setMethodCallHandler
@@ -67,6 +69,8 @@ class MainActivity : FlutterFragmentActivity() {
                             fpsTarget = fps,
                             maxDimension = maxDimension,
                             useGpu = useGpu,
+                            startMs = startMs,
+                            endMs = endMs,
                             onSuccess = { frames ->
                                 if (replied.compareAndSet(false, true)) {
                                     result.success(frames)
@@ -78,6 +82,10 @@ class MainActivity : FlutterFragmentActivity() {
                                 }
                             }
                         )
+                    }
+                    "cancelProcessing" -> {
+                        processor.cancelProcessing()
+                        result.success(null)
                     }
                     else -> result.notImplemented()
                 }

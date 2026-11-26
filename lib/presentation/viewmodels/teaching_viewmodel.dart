@@ -330,6 +330,7 @@ class TeachingViewModel extends ChangeNotifier {
         _evaluationResult = evaluatePracticeUseCase.execute(
           referenceSign: _selectedSign!,
           attemptFrames: frames,
+          otherSigns: dictionaryRepository.allSigns,
         );
       }
       _mode = TeachingMode.practiceResult;

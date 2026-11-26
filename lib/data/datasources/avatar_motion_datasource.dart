@@ -39,6 +39,15 @@ class AvatarMotionDataSource {
     }
   }
 
+  /// Fuerza la recarga del banco de movimiento del avatar.
+  Future<void> refresh() async {
+    _isLoaded = false;
+    _signs.clear();
+    _allSignsList = [];
+    _cachedCategories = [];
+    await initialize();
+  }
+
   AvatarSignData? getSign(String query) {
     final clean = _cleanKey(query);
     return _signs[clean];

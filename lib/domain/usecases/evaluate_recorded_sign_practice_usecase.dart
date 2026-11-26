@@ -17,6 +17,8 @@ class PracticeEvaluationResult {
   final int totalEvaluatedFrames;
   final PracticeVerdict verdict;
   final String feedbackMessage;
+  final String? alternativeSignWord;
+  final int? alternativeConfidencePercent;
 
   const PracticeEvaluationResult({
     required this.overallConfidence,
@@ -26,9 +28,19 @@ class PracticeEvaluationResult {
     required this.totalEvaluatedFrames,
     required this.verdict,
     required this.feedbackMessage,
+    this.alternativeSignWord,
+    this.alternativeConfidencePercent,
   });
 
   int get confidencePercent => (overallConfidence * 100).round().clamp(0, 100);
+
+  /// Mensaje de sugerencia cuando el intento se parece mucho más a otra seña.
+  String? get alternativeSuggestionMessage {
+    if (alternativeSignWord == null || alternativeConfidencePercent == null) {
+      return null;
+    }
+    return '$confidencePercent% de similitud, sin embargo, hubo un $alternativeConfidencePercent% de similitud con $alternativeSignWord, ¿hiciste esta seña? De no ser así, ignora este mensaje y sigue practicando.';
+  }
 }
 
 /// Evalúa offline una práctica grabada comparando la secuencia completa de landmarks
@@ -38,8 +50,66 @@ class PracticeEvaluationResult {
 /// a traslación/escala y alineamiento temporal DTW (Dynamic Time Warping).
 class EvaluateRecordedSignPracticeUseCase {
   static const int _resampleSteps = 20;
+  static const double _minAlternativeConfidence = 0.70;
+  static const double _minAlternativeMargin = 0.15;
 
   PracticeEvaluationResult execute({
+    required RecordedSign referenceSign,
+    required List<SignFrameLandmarks> attemptFrames,
+    List<RecordedSign> otherSigns = const [],
+  }) {
+    final primary = _evaluateSingle(
+      referenceSign: referenceSign,
+      attemptFrames: attemptFrames,
+    );
+
+    if (primary.verdict == PracticeVerdict.insufficientHands ||
+        primary.overallConfidence >= 0.75 ||
+        otherSigns.isEmpty) {
+      return primary;
+    }
+
+    RecordedSign? bestOtherSign;
+    PracticeEvaluationResult? bestOtherResult;
+    for (final candidate in otherSigns) {
+      if (candidate.id == referenceSign.id) continue;
+      final candidateResult = _evaluateSingle(
+        referenceSign: candidate,
+        attemptFrames: attemptFrames,
+      );
+      if (candidateResult.verdict == PracticeVerdict.insufficientHands) {
+        continue;
+      }
+      if (bestOtherResult == null ||
+          candidateResult.overallConfidence >
+              bestOtherResult.overallConfidence) {
+        bestOtherSign = candidate;
+        bestOtherResult = candidateResult;
+      }
+    }
+
+    if (bestOtherSign != null &&
+        bestOtherResult != null &&
+        bestOtherResult.overallConfidence >= _minAlternativeConfidence &&
+        (bestOtherResult.overallConfidence - primary.overallConfidence) >=
+            _minAlternativeMargin) {
+      return PracticeEvaluationResult(
+        overallConfidence: primary.overallConfidence,
+        shapeAndMotionScore: primary.shapeAndMotionScore,
+        handDetectionRate: primary.handDetectionRate,
+        validFrames: primary.validFrames,
+        totalEvaluatedFrames: primary.totalEvaluatedFrames,
+        verdict: primary.verdict,
+        feedbackMessage: primary.feedbackMessage,
+        alternativeSignWord: bestOtherSign.word,
+        alternativeConfidencePercent: bestOtherResult.confidencePercent,
+      );
+    }
+
+    return primary;
+  }
+
+  PracticeEvaluationResult _evaluateSingle({
     required RecordedSign referenceSign,
     required List<SignFrameLandmarks> attemptFrames,
   }) {
